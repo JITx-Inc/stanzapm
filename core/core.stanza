@@ -209,7 +209,7 @@ protected lostanza deftype ArrayRecord :
   num-item-roots:int
   roots:int ...
 
-protected lostanza deftype HeapStatistics :
+protected lostanza deftype HeapStatistic :
   var num-uses:long
   var num-bytes:long
 
@@ -236,7 +236,7 @@ protected lostanza deftype VMState :
   safepoint-table: ptr<?>     ;(Variable State)
   debug-table: ptr<?>         ;(Variable State)
   local-var-table: ptr<?>     ;(Variable State)
-  heap-statistics: ptr<HeapStatistics>  ;(Variable State)
+  heap-statistics: ptr<HeapStatistic>  ;(Variable State)
   ;Compiled Mode Tables
   class-table: ptr<ClassDescriptor>
   global-root-table: ptr<GlobalRoots>
@@ -2785,42 +2785,32 @@ public lostanza defn min (x:long, y:long) -> long :
 ;===================== Heap Analyzer ========================
 ;============================================================
 
-lostanza defn num-concrete-classes (vms:ptr<VMState>) -> int :
+public defstruct HeapStat :
+  tag : Int         ; type
+  name : String     ; name of type
+  num-uses : Long   ; num references in heap
+  num-bytes : Long  ; num bytes occupied in heap
+with:
+  printer => true
+
+; clear out statistics for each concrete class
+lostanza defn clear-heap-statistics (vms:ptr<VMState>) -> int :
   labels:
     begin: goto loop(0)
     loop (i:int) :
       val stat = vms.heap-statistics[i]
-      if stat.num-bytes < 0L :
+      if stat.num-bytes < 0L : ; sentinel
         return stat.num-uses as int
       else :
+        vms.heap-statistics[i].num-bytes = 0
+        vms.heap-statistics[i].num-uses = 0
         goto loop(i + 1)
 
-public defstruct HeapStat :
-  tag : Int
-  name : String
-  num-uses : Long
-  num-bytes : Long
-with:
-  printer => true
-
-public defn analyze-heap () -> Long :
-  val counts = Vector<HeapStat>()
-  val size = do-analyze-heap(counts)
-  val res = reverse(to-list(lazy-qsort(num-bytes, counts)))
-  println("Heap size %_" % [size])
-  var max-bytes-size = reduce(max, length("Size"), seq({ length(to-string(num-bytes(_))) }, res))
-  var max-uses-size  = reduce(max, length("Uses"), seq({ length(to-string(num-uses(_))) }, res))
-  defn pad (s:String, n:Int) -> String : append-all(cat(repeatedly({ " " }, (n - length(s))), [s]))
-  println("  %_ %_: %_" % [pad("Size", max-bytes-size), pad("Use", max-uses-size), "Type"])
-  for hc in res do :
-    println("  %_ %_: %_" % [pad(to-string(num-bytes(hc)), max-bytes-size), pad(to-string(num-uses(hc)), max-uses-size), name(hc)])
-  size
-
-lostanza defn do-analyze-heap (counts:ref<Vector<HeapStat>>) -> ref<Long> :
+; run gc, collect heap stats while walking each object in  nursery and heap
+lostanza defn do-analyze-heap (stats:ref<Vector<HeapStat>>) -> ref<Long> :
   val vms:ptr<VMState> = call-prim flush-vm()
   run-garbage-collector()
-  val num-classes = num-concrete-classes(vms)
-  clear(vms.heap-statistics, num-classes * sizeof(HeapStatistics))
+  val num-classes = clear-heap-statistics(vms)
   val hsize = do-analyze-heap(vms.heap.start, vms.heap.old-objects-end, vms)
   val nursery = nursery-start(addr(vms.heap))
   val nsize = do-analyze-heap(nursery, vms.heap.top, vms)
@@ -2828,9 +2818,10 @@ lostanza defn do-analyze-heap (counts:ref<Vector<HeapStat>>) -> ref<Long> :
     val heap-stat = vms.heap-statistics[i]
     val num-uses = heap-stat.num-uses
     if num-uses > 0L :
-      add(counts, HeapStat(new Int{i as int}, String(class-name(i)), new Long{num-uses}, new Long{heap-stat.num-bytes}))
+      add(stats, HeapStat(new Int{i as int}, String(class-name(i)), new Long{num-uses}, new Long{heap-stat.num-bytes}))
   return new Long{ hsize + nsize }
 
+; collect heap stats while walking each object in consecutive range of memory
 lostanza defn do-analyze-heap (pstart:ptr<long>, pend:ptr<long>, vms:ptr<VMState>) -> long :
   var p:ptr<long> = pstart
   while p < pend :
@@ -2851,6 +2842,23 @@ lostanza defn do-analyze-heap (pstart:ptr<long>, pend:ptr<long>, vms:ptr<VMState
     vms.heap-statistics[tag].num-uses = vms.heap-statistics[tag].num-uses + 1L
     vms.heap-statistics[tag].num-bytes = vms.heap-statistics[tag].num-bytes + size
   return (pend as long) - (pstart as long)
+
+; public interface to heap analyzer collecting and printing out stats
+public defn analyze-heap () -> Long :
+  val stats = Vector<HeapStat>()
+  val size = do-analyze-heap(stats)
+  val res = reverse(to-list(lazy-qsort(num-bytes, stats)))
+  println("Heap size %_" % [size])
+  var max-bytes-size = reduce(max, length("Size"), seq({ length(to-string(num-bytes(_))) }, res))
+  var max-perc-size  = 3
+  var max-uses-size  = reduce(max, length("Uses"), seq({ length(to-string(num-uses(_))) }, res))
+  defn pad (s:String, n:Int) -> String : append-all(cat(repeatedly({ " " }, (n - length(s))), [s]))
+  println("  %_ %_ %_: %_" % [pad("Size", max-bytes-size), "Perc", pad("Use", max-uses-size), "Type"])
+  for hc in res do :
+    val p = to-int(to-double(num-bytes(hc)) * 100.0 / to-double(size))
+    println("  %_ %_%% %_: %_" % [
+      pad(to-string(num-bytes(hc)), max-bytes-size), pad(to-string(p), max-perc-size), pad(to-string(num-uses(hc)), max-uses-size), name(hc)])
+  size
 
 ;============================================================
 ;===================== Debugging ============================
