@@ -31,17 +31,17 @@ defpackage stz/el :
 ;==================== Drivers ===============================
 ;============================================================
 
-public defn lower-optimized (epackages:Tuple<EPackage>) -> EPackage :
+public defn lower-optimized (epackages:Tuple<EPackage>, profile?:True|False, coverage?:True|False) -> EPackage :
   vprintln("EL: Lower optimized packages: %," % [seq(name, epackages)])
   val epackages* = map(fill-stack-trace-entries, epackages)
   ;do(dump{_, "logs", "input"}, epackages*)
   val collapsed = collapse(epackages*)
   ;dump(collapsed, "logs", "collapsed")
-  lower(collapsed, true)
+  lower(collapsed, true, profile?, coverage?)
 
-public defn lower-unoptimized (epackage:EPackage) -> EPackage :
+public defn lower-unoptimized (epackage:EPackage, profile?:True|False, coverage?:True|False) -> EPackage :
   vprintln("EL: Lower unoptimized package: %_" % [name(epackage)])
-  lower(fill-stack-trace-entries(epackage), false)
+  lower(fill-stack-trace-entries(epackage), false, profile?, coverage?)
 
 ;============================================================
 ;===================== Timers ===============================
@@ -56,7 +56,7 @@ val EL-TIMERS = within pass-name = HashTable-init<String,TimerLabel>() :
 ;========================= Lowering =========================
 ;============================================================
 
-defn lower (epackage:EPackage, optimize?:True|False) -> EPackage :
+defn lower (epackage:EPackage, optimize?:True|False, profile?:True|False, coverage?:True|False) -> EPackage :
   val lower-timer-name = to-string("EL-LOWER -- %_" % [name(epackage)])
   within log-time(EL-LOWER, lower-timer-name) :
 
@@ -105,6 +105,8 @@ defn lower (epackage:EPackage, optimize?:True|False) -> EPackage :
     run-pass("Box Mutables", box-mutables, "boxed", false)
     run-pass("Detect Loops", detect-loops, "looped", false)
     run-pass("Simple Inline", simple-inline, "inlined0", false)
+    if profile? or coverage? :
+      run-pass("Profile", insert-profiling{_, coverage?}, "profile", true)
     run-pass("Within Package Inline", within-package-inline{_, true}, "wp-inlined0", false)
     run-pass("Cleanup Labels", cleanup-labels, "cleanup-labels", false)
     if optimize? :
@@ -1754,6 +1756,8 @@ defn inline-call (buffer:BodyBuffer,
               emit(buffer, ESafepoint(group-id(i), info))
             (call-info, instruction-info):
               emit(buffer, i)
+        (i:EProfile) :
+          false
         (i) :
           emit(buffer, i)
 
@@ -2128,6 +2132,60 @@ defn rename-fn (f:EFn) -> EFn :
 
   create-definitions(f)
   rename(f) as EFn
+
+;============================================================
+;=================== Insert Profiling =======================
+;============================================================
+
+defn insert-profiling (epackage:EPackage, coverage?:True|False) :
+  val infos    = Vector<FunctionInfo>()
+  val iotable  = IOTable(packageio(epackage))
+  val num-uses = IntTable<Int>(0)
+  defn get-info (sinfo:False|TraceInfo, body:EBody) -> False|StackTraceEntry :
+    match(sinfo) :
+      (sinfo: StackTraceEntry) : sinfo
+      (sinfo) :
+        label<False|StackTraceEntry> return :
+          for i in ins(body) do :
+            match(info?(i)) :
+              (info:StackTraceEntry) : return(info)
+              (info) : false
+          
+  defn insert (e:EBody, sinfo:StackTraceEntry, insert?:True|False) -> EBody :
+    val buffer = BodyBuffer(e)
+    val id = length(infos)
+    emit(buffer, EProfile(id, 1 when coverage? else 0)) when insert?
+    for i in ins(e) do :
+      val i* =
+        match(info?(i)) :
+          (info:StackTraceEntry) : sub-info(i, sub-function(info, id))
+          (info) : i
+      emit(buffer, i*)
+      if insert? and not coverage? :
+        match(i:ELabel) :
+          emit(buffer, EProfile(id, 0)) when (num-uses[n(i)] == 0)
+        else :
+          for v in label-uses(i) do :
+            update(num-uses, {_ + 1}, v)
+    add(infos, FunctionInfo(sinfo))
+    to-body(buffer)
+
+  defn insert-texp (t:ELBigItem, insert?:True|False) -> ELBigItem :
+    match(map(insert-texp{_, insert?}, t)) :
+      (e:EFn) : 
+        ; println("%_ INFO %_" % [length(infos), get-info(info(e), body(e))])
+        match(get-info(info(e), body(e))) :
+          (i:StackTraceEntry) : sub-body(e, insert(body(e), i, insert?))
+          (i:False) : e
+      (e) : e
+
+  ;Inline all top-level expressions
+  val new-exps = for exp in exps(epackage) map :
+    match(exp) :
+      (exp:EDefn) : insert-texp(exp, n(exp) != n(iotable,CORE-PROFILE-STACK-TRACE-ID)) as ETExp
+      (exp:EDefClosure|EDefmethod) : insert-texp(exp, true) as ETExp
+      (exp) : exp
+  sub-function-info(sub-exps(epackage, new-exps), to-tuple $ infos)
 
 ;============================================================
 ;==================== Label Cleanup =========================

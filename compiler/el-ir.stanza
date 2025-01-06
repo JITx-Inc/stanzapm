@@ -544,6 +544,10 @@ public defstruct DetupleContext <: CastErrorContext
 public defstruct GetVarContext <: CastErrorContext
 public defstruct BranchContext <: CastErrorContext
 
+public defstruct EProfile <: EIns :
+  id: Int
+  kind: Int
+
 ;============================================================
 ;======================= Primitives =========================
 ;============================================================
@@ -761,6 +765,7 @@ defmethod print (o:OutputStream, e:EIns) :
     (e:ETypeof) : P $ "goto L%_ when typeof(%_, %_) else L%_" % [n1(e), y(e), type(e), n2(e)]
     (e:ECheckFail) : P $ "check-fail(%_) %_ : %_" % [ctxt(e), y(e), type(e)]
     (e:ESafepoint) : P $ "safepoint %_ ;%_" % [group-id(e), info?(e)]
+    (e:EProfile) : P $ "profile(%_,%_)" % [id(e), kind(e)]
 
 defmethod print (o:OutputStream, t:CallType) :
   print{o, _} $ match(t) :
@@ -1001,6 +1006,7 @@ defsyntax el-ir :
   defrule eins = (?x:#vloc : ?xt:#etype = load ?loc:#eloc) : ELoad(x, xt, loc)
   defrule eins = (?x:#vloc = call ?t:#calltype ?f:#eimm(?ys:#eimm ...)) : ECall(x, f, to-tuple(ys), t, add-base-dir(closest-info()))
   defrule eins = (?x:#vloc = ?y:#eimm) : EDef(x, y)
+  defrule eins = (profile(?id:#int, ?arg:#int)) : EProfile(id, arg)
 
   defproduction calltype : CallType
   defrule calltype = (guarded((?a1:#etype ...) -> ?a2:#etype)) : CallGuarded(to-tuple(a1), a2)
@@ -1420,6 +1426,9 @@ defmethod map<?T> (f:ELItem -> ELItem, item:ELItem&?T) -> ELItem&T :
     ;Closures
     (e:EClosure) : EClosure(n(e), h(targs(e)), h(ys(e)))
 
+    ;Profile
+    (e:EProfile) : EProfile(id(e), kind(e))
+
 ;============================================================
 ;===================== Definitions ==========================
 ;============================================================
@@ -1478,6 +1487,7 @@ public defn varlocs (e:EIns) -> Tuple<EVarLoc> :
     (e:ETypeof) : []
     (e:ECheckFail) : []
     (e:ESafepoint) : []
+    (e:EProfile) : []
 
 ;Return the list of immediates that the instruction
 ;uses to perform its action.
@@ -1532,6 +1542,7 @@ public defn uses (e:EIns) -> Seqable<EImm> :
     (e:ETypeof) : [y(e)]
     (e:ECheckFail) : [y(e)]
     (e:ESafepoint) : []
+    (e:EProfile) : []
 
 ;Return the list of immediates that the instruction
 ;uses to retrieve its location.

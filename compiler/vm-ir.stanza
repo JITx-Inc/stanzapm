@@ -32,7 +32,8 @@ public val EXTEND-HEAP-FN = 0
 public val EXTEND-STACK-FN = 1
 public val INIT-CONSTS-FN = 2
 public val EXECUTE-TOPLEVEL-COMMAND-FN = 3
-public val NUM-BUILTIN-FNS = 4
+public val PROFILE-STACK-TRACE-FN = 4
+public val NUM-BUILTIN-FNS = 5
 
 ;============================================================
 ;================== Design of Instructions ==================
@@ -312,6 +313,9 @@ public defstruct UnreachableIns <: VMIns
 public defstruct SafepointIns <: VMIns :
   id:Int
   trace-entry: StackTraceInfo with: (as-method => true)
+public defstruct ProfileIns <: VMIns :
+  id : Int
+  kind : Int
 
 public defn trace-entry! (ins:SafepointIns) -> StackTraceInfo :
   trace-entry(ins) as StackTraceInfo
@@ -879,6 +883,8 @@ defmethod print (o:OutputStream, i:VMIns) :
       val o2 = IndentedStream(o)
       lnprint(o2, "else : goto %_" % [default(i)])
       lnprint(o2, "amb : goto %_" % [amb(i)])
+    (i:ProfileIns) :
+      print(o, "profile(%_, %_)" % [id(i), kind(i)])
 
 defmethod print (o:OutputStream, op:VMOp) :
   print{o, _} $ match(op) :

@@ -158,6 +158,8 @@ public defn compile (proj-manager:ProjManager,
                      backend:Backend,
                      optimize?:True|False,
                      debug?:True|False,
+                     profile?:True|False,
+                     coverage?:True|False,
                      macro-plugins:Tuple<String>,
                      force-build-macros?:True|False) -> CompilationResult :
   defn driver () :
@@ -224,7 +226,7 @@ public defn compile (proj-manager:ProjManager,
       `unoptimized-asm :
         val packages = for p in /packages(result) map :
           match(p) :
-            (p:EPackage) : compile(lower-unoptimized(p), debug?)
+            (p:EPackage) : compile(lower-unoptimized(p, profile?, coverage?), debug?)
             (p:StdPkg)  : p
         compile-vmpackages(pkgsaver when write-out-pkgs?,
                            packages,
@@ -244,7 +246,7 @@ public defn compile (proj-manager:ProjManager,
     val epackages = for p in packages map :
       match(p:FastPkg) : EPackage(packageio(p), exps(p))
       else : p as EPackage
-    compile(lower-optimized(epackages), debug?)
+    compile(lower-optimized(epackages, profile?, coverage?), debug?)
 
   ;- pkgsaver: False if we not need to write out any .pkg files to disk (either
   ;  to pkg dir or to pkg cache.).
@@ -309,7 +311,7 @@ public defn compile (proj-manager:ProjManager,
     for package in packages do :
       match(package) :
         (epackage:EPackage) :
-          val vmpackage = compile(lower-unoptimized(epackage), debug?)
+          val vmpackage = compile(lower-unoptimized(epackage, profile?, coverage?), debug?)
           val npkg = normalize(vmpackage, backend)
           val buffer = Vector<Ins>()
           emit-normalized-package(npkg, buffer-emitter(buffer, stubs), stubs)
