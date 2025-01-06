@@ -596,6 +596,8 @@ defn compile-macros-command () :
         flag?(cmd-args, "build-from-source")
         flag?(cmd-args, "optimize")
         false
+        false
+        false
         get?(cmd-args, "ccfiles", [])
         ccflags(cmd-args)
         get?(cmd-args, "flags", [])
@@ -1001,6 +1003,8 @@ defn analyze-dependencies-command () :
         flag?(cmd-args, "build-from-source")
         flag?(cmd-args, "optimize")
         false
+        false
+        false
         []
         []
         map(to-symbol, get?(cmd-args, "flags", []))
@@ -1074,6 +1078,8 @@ defn auto-doc-command () :
         false
         false
         flag?(cmd-args, "optimize")
+        false
+        false
         false
         []
         []

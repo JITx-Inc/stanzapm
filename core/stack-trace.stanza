@@ -54,6 +54,7 @@ public defstruct StackTraceEntry <: Hashable & Equalable :
   package:Symbol
   signature:String|False
   info:AbsoluteFileInfo|False
+  function:Int|False with: (updater => sub-function)
 with:
   hashable => true
   equalable => true
@@ -231,7 +232,7 @@ lostanza defn record (trace:ptr<PackedStackTrace>, i:int) -> ref<StackTraceEntry
              base as ref<String>,
              file as ref<String>,
              new Int{r.line}, new Int{r.column})
-  return StackTraceEntry(new Long{r.address}, new Long{r.stack-pointer}, to-symbol(package), signature, info)
+  return StackTraceEntry(new Long{r.address}, new Long{r.stack-pointer}, to-symbol(package), signature, info, new Int{r.function})
 
 ;Unpack the given entry at the given index.
 protected lostanza defn entry (trace:ptr<PackedStackTrace>, i:int) -> ref<StackTraceEntry> :
