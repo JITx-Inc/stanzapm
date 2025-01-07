@@ -256,6 +256,7 @@ public lostanza deftype StackTraceRecord :
   file:ptr<byte>
   line:int
   column:int
+  function:int
 
 ;Add the given record as an entry in the stack trace.
 public lostanza defn add-entry (b:ref<StackTraceBuilder>,
@@ -294,7 +295,8 @@ lostanza defn add-record? (b:ref<StackTraceBuilder>, e:ptr<core/StackTraceTableE
                       add-string?(b, e.record.base),
                       add-string?(b, e.record.file),
                       new Int{e.record.line}
-                      new Int{e.record.column})
+                      new Int{e.record.column}
+                      new Int{e.record.function as int})
   else :
     return index as ref<Int>
 
@@ -315,6 +317,9 @@ defn add-record? (b:StackTraceBuilder, e:StackTraceEntry) -> Int :
       val [base, info-file, info-line, info-column] = match(info(e)) :
         (info:AbsoluteFileInfo) : [base(info), filename(info), line(info), column(info)]
         (f:False) : [false, false, 0, 0]
+      val function = match(function(e)) :
+        (f:False) : -1
+        (f:Int) : f
       add-record(b,
                  instruction-pointer(e),
                  stack-pointer(e)
@@ -323,7 +328,8 @@ defn add-record? (b:StackTraceBuilder, e:StackTraceEntry) -> Int :
                  add-string?(b, base)
                  add-string?(b, info-file)
                  info-line,
-                 info-column)
+                 info-column,
+                 function)
     (index:Int) :
       index
 
@@ -351,7 +357,7 @@ public deftype StackTraceBuilder
 defmulti add-entry (b:StackTraceBuilder, entry:Int) -> False
 defmulti record-index? (b:StackTraceBuilder, address:Long) -> Int|False
 defmulti add-record (b:StackTraceBuilder, address:Long, stack-pointer:Long,
-                     package:Int, signature:Int, base:Int, file:Int, line:Int, column:Int) -> Int
+                     package:Int, signature:Int, base:Int, file:Int, line:Int, column:Int, function:Int) -> Int
 defmulti string-index? (b:StackTraceBuilder, str:Long|String) -> Int|False
 defmulti add-string (b:StackTraceBuilder, key:Long|String, str:String) -> Int
 defmulti pack-buffer (b:StackTraceBuilder) -> ByteBuffer
@@ -372,7 +378,7 @@ public defn StackTraceBuilder () -> StackTraceBuilder :
     defmethod record-index? (this, address:Long) :
       get?(record-table, address)
     defmethod add-record (this, address:Long, stack-pointer:Long,
-                          package:Int, signature:Int, base:Int, file:Int, line:Int, column:Int) :
+                          package:Int, signature:Int, base:Int, file:Int, line:Int, column:Int, function:Int) :
       val index = length(record-table)
       record-table[address] = index
       put(record-buffer, address)
@@ -383,6 +389,7 @@ public defn StackTraceBuilder () -> StackTraceBuilder :
       put(record-buffer, file)
       put(record-buffer, line)
       put(record-buffer, column)
+      put(record-buffer, function)
       index
     defmethod string-index? (this, key:Long|String) :
       get?(string-table, key)

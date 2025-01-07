@@ -11356,7 +11356,7 @@ lostanza defn build-stack-trace-record-table (trace-table:ptr<StackTraceTable>) 
         val ret = get(trace, new Int{j as int})
         val entry = stack-trace-record(ret.value, vms.stack-trace-table, tab)
         if entry != null :
-          val id = entry.record.function
+          val id = entry.function
           if id != -1L :
             add(trace*, new Int{id as int})
       add(id-traces, to-tuple(trace*))
