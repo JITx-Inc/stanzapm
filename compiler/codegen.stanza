@@ -49,6 +49,10 @@ public defstruct AsmStubs :
   stack-limit:Int
   registers:Int
   system-registers-space:Int
+  profile-flag:Int
+  profile-buffer:Int
+  function-counters:Int
+  function-info:Int
   heap-start:Int
   heap-top:Int
   heap-limit:Int
@@ -105,6 +109,10 @@ public defn AsmStubs (backend:Backend) :
     next(id-counter)  ;stack-limit:Int
     next(id-counter)  ;registers:Int
     next(id-counter)  ;system-registers-space:Int
+    next(id-counter)  ;profile-flag:Int
+    next(id-counter)  ;profile-buffer:Int
+    next(id-counter)  ;function-counters:Int
+    next(id-counter)  ;function-info:Int
     next(id-counter)  ;heap-start:Int
     next(id-counter)  ;heap-top:Int
     next(id-counter)  ;heap-limit:Int
@@ -204,6 +212,10 @@ public defn compile-runtime-stubs (emitter:CodeEmitter, stubs:AsmStubs) :
   comment("stack-limit = %_" % [stack-limit(stubs)])
   comment("registers = %_" % [registers(stubs)])
   comment("system-registers-space = %_" % [system-registers-space(stubs)])
+  comment("profile-flag = %_" % [profile-flag(stubs)])
+  comment("profile-buffer = %_" % [profile-buffer(stubs)])
+  comment("function-counters = %_" % [function-counters(stubs)])
+  comment("function-info = %_" % [function-info(stubs)])
   comment("heap-start = %_" % [heap-start(stubs)])
   comment("heap-top = %_" % [heap-top(stubs)])
   comment("heap-limit = %_" % [heap-limit(stubs)])
@@ -334,6 +346,10 @@ public defn compile-entry-function (emitter:CodeEmitter, stubs:AsmStubs) :
                                #label(safepoint-table)        ;safepoint-table:ptr<?>
                                #label(debug-table)            ;debug-table:ptr<?>
                                #label(local-var-table)        ;local-var-table:ptr<?>
+                               #label(profile-flag)           ;profile-flag: ptr<long>
+                               #long()                        ;profile-buffer: ptr<long>
+                               #label(function-counters)      ;function-counters: ptr<long>
+                               #label(function-info)          ;function-info: ptr<FunctionInfoTable>
                                #label(class-table)            ;class-table:ptr<?>
                                #label(global-root-table)      ;global-root-table:ptr<GlobalRoots>
                                #label(stackmap-table)         ;stackmap-table:ptr<?>

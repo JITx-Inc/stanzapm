@@ -50,6 +50,7 @@ public defstruct VMPackage :
   externs: Tuple<VMExtern>
   extern-defns: Tuple<VMExternDefn>
   debug-name-table: VMDebugNameTable
+  function-info: False|Tuple<FunctionInfo> with: (default => false)
   debug-table: VMDebugInfoTable
   safepoint-table: VMSafepointTable
 

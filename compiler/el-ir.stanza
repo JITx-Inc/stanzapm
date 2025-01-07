@@ -46,6 +46,7 @@ public defstruct EBot <: HiEType
 public defstruct EPackage :
   packageio: PackageIO with: (updater => sub-packageio)
   exps: Tuple<ETExp> with: (updater => sub-exps)
+  function-info: False|Tuple<FunctionInfo> with: (default => false, updater => sub-function-info)
 
 public defn name (e:EPackage) :
   package(packageio(e))

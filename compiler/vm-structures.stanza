@@ -31,6 +31,10 @@ public lostanza deftype VMState :
   var safepoint-table: ptr<?>      ;(Permanent State)
   var debug-table: ptr<?>          ;(Permanent State)
   var local-var-table: ptr<?>      ;(Permanent State)
+  var profile-flag: ptr<long>
+  var profile-buffer: ptr<byte>    ; ptr<LSLongVector>
+  function-counters: ptr<long>
+  function-info: ptr<byte>         ; ptr<FunctionInfoTable>
   var class-table: ptr<?>          ;(Permanent State)
   ;Interpreted Mode Tables
   var instructions: ptr<byte>      ;(Permanent State)

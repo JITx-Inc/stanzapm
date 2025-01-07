@@ -593,6 +593,128 @@ void stz_memory_resize (void* p, stz_long old_size, stz_long new_size) {
 #endif
 
 //============================================================
+//==================== Profiler ==============================
+//============================================================
+
+#if defined(PLATFORM_OS_X) || defined(PLATFORM_LINUX)
+
+#include <sys/time.h>
+#include <pthread.h>
+
+static pthread_t main_thread_handle;
+
+static pthread_t thread_create(int thread_routine(void *parameter), void *parameter) {
+  pthread_attr_t attr;
+  pthread_t os_thread;
+
+  if (pthread_attr_init(&attr) != 0) {
+    return 0;
+  }
+
+  // Don't leave thread/stack around after exit for join:
+  if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0) {
+    return 0;
+  }
+
+  // Apparently, it is a different type on Linux.
+  void* (*routine)(void*) = (void*(*)(void *))thread_routine;
+
+  if (pthread_create(&os_thread, &attr, routine, NULL) != 0) {
+    return 0;
+  }
+  return os_thread;
+}
+
+static bool ticker_stopped = false;
+static bool ticker_running = false;
+static bool ticker_stopping = false;
+static bool ticker_created = false;
+static bool EnableTicks = true;
+static int TickInterval = 100; // mSec
+
+static uint64_t *profile_flag;
+static uint64_t *function_counters;
+static int num_functions;
+
+// Timer thread that sets flag every tickinterval msecs
+static int ticker_thread_routine(void *parameter) {
+  ticker_stopped = false;
+  while (!ticker_stopping) {
+    usleep(TickInterval * 1000);
+
+    if (ticker_running) {
+      if (*profile_flag != 2L) // Not still profiling stack trace?
+        *profile_flag = 1L;    // Profile next stack trace
+    }
+  }
+  ticker_stopped = true;
+  return 0;
+}
+
+bool start_ticks() {
+  if (!EnableTicks) {
+    return true;
+  }
+  ticker_running = true;
+  ticker_stopping = false;
+  if (!ticker_created) {
+    ticker_created = true;
+    if (thread_create(ticker_thread_routine, 0) == 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static void suspend_ticks() {
+  ticker_running = false;
+  sleep(1); // why is this necessary?
+}
+
+static void resume_ticks() {
+  start_ticks();
+}
+
+static void stop_ticks() {
+  if (ticker_created) {
+    ticker_stopping = true;
+    if (ticker_running) {
+      for (int i=0; i<10 && !ticker_stopped; i++) { // Wait for thread to die 
+        usleep(TickInterval * 1000);
+      }
+    }
+    ticker_created = false;
+    ticker_running = false;
+    ticker_stopped = false;
+  }
+}
+
+int start_sample_profiling (int msecs, int num_functions_arg, uint64_t *profile_flag_arg, uint64_t *function_counters_arg) {
+  TickInterval = msecs;
+  num_functions = num_functions_arg;
+  profile_flag = profile_flag_arg;
+  function_counters = function_counters_arg;
+  start_ticks();
+  return 1;
+}
+
+int stop_sample_profiling() {
+  stop_ticks();
+  return 1;
+}
+
+#else
+
+int start_profile_sampling (void *handler, int usecs) {
+  return 0;
+}
+int stop_sample_profiling () {
+  return 0;
+}
+
+#endif
+
+//============================================================
 //================= Process Runtime ==========================
 //============================================================
 #if defined(PLATFORM_OS_X) || defined(PLATFORM_LINUX)

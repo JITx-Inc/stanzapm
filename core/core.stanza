@@ -188,6 +188,17 @@ protected lostanza deftype StackTraceTableEntry :
   lbl: ptr<?>
   record: StackTraceRecord
 
+lostanza deftype FunctionInfoTable :
+  length: long
+  entries: FunctionInfoEntry ...
+
+lostanza deftype FunctionInfoEntry :
+  package: ptr<byte>
+  name: ptr<byte>
+  file: ptr<byte>
+  line: int
+  column: int
+
 lostanza deftype ClassDescriptor :
   case:int
   num-base-bytes:int
@@ -214,31 +225,62 @@ protected lostanza deftype ArrayRecord :
 ;are used only in compiled mode.
 ;Permanent state changes in-between each code load.
 ;Variable state changes in-between each boundary change.
-protected lostanza deftype VMState :
-  ;Compiled and Interpreted Mode
-  global-offsets: ptr<long>   ;(Permanent State)
-  global-mem: ptr<byte>       ;(Permanent State)
-  var sig-handler: long       ;(Permanent State)
-  var current-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
-  var stepping-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
-  const-table: ptr<long>      ;(Permanent State)
-  const-mem: ptr<byte>        ;(Permanent State)
-  data-offsets: ptr<int>      ;(Permanent State)
-  data-mem: ptr<byte>         ;(Permanent State)
-  code-offsets: ptr<int>      ;(Permanent State)
-  registers: ptr<long>        ;(Permanent State)
-  system-registers: ptr<long> ;(Permanent State)
-  var heap: Heap              ;(Variable State)
-  safepoint-table: ptr<?>     ;(Variable State)
-  debug-table: ptr<?>         ;(Variable State)
-  local-var-table: ptr<?>     ;(Variable State)
-  ;Compiled Mode Tables
-  class-table: ptr<ClassDescriptor>
-  global-root-table: ptr<GlobalRoots>
-  stackmap-table: ptr<ptr<StackMap>>
-  stack-trace-table: ptr<StackTraceTable>
-  extern-table: ptr<ExternTable>
-  extern-defn-table: ptr<ExternDefnTable>
+#if-defined(BOOTSTRAP) :
+  protected lostanza deftype VMState :
+    ;Compiled and Interpreted Mode
+    global-offsets: ptr<long>   ;(Permanent State)
+    global-mem: ptr<byte>       ;(Permanent State)
+    var sig-handler: long       ;(Permanent State)
+    var current-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
+    var stepping-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
+    const-table: ptr<long>      ;(Permanent State)
+    const-mem: ptr<byte>        ;(Permanent State)
+    data-offsets: ptr<int>      ;(Permanent State)
+    data-mem: ptr<byte>         ;(Permanent State)
+    code-offsets: ptr<int>      ;(Permanent State)
+    registers: ptr<long>        ;(Permanent State)
+    system-registers: ptr<long> ;(Permanent State)
+    var heap: Heap              ;(Variable State)
+    safepoint-table: ptr<?>     ;(Variable State)
+    debug-table: ptr<?>         ;(Variable State)
+    local-var-table: ptr<?>     ;(Variable State)
+    ;Compiled Mode Tables
+    class-table: ptr<ClassDescriptor>
+    global-root-table: ptr<GlobalRoots>
+    stackmap-table: ptr<ptr<StackMap>>
+    stack-trace-table: ptr<StackTraceTable>
+    extern-table: ptr<ExternTable>
+    extern-defn-table: ptr<ExternDefnTable>
+#else:
+  protected lostanza deftype VMState :
+    ;Compiled and Interpreted Mode
+    global-offsets: ptr<long>   ;(Permanent State)
+    global-mem: ptr<byte>       ;(Permanent State)
+    var sig-handler: long       ;(Permanent State)
+    var current-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
+    var stepping-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
+    const-table: ptr<long>      ;(Permanent State)
+    const-mem: ptr<byte>        ;(Permanent State)
+    data-offsets: ptr<int>      ;(Permanent State)
+    data-mem: ptr<byte>         ;(Permanent State)
+    code-offsets: ptr<int>      ;(Permanent State)
+    registers: ptr<long>        ;(Permanent State)
+    system-registers: ptr<long> ;(Permanent State)
+    var heap: Heap              ;(Variable State)
+    safepoint-table: ptr<?>     ;(Variable State)
+    debug-table: ptr<?>         ;(Variable State)
+    local-var-table: ptr<?>     ;(Variable State)
+    profile-flag: ptr<long>
+    var profile-buffer: ptr<LSLongVector>
+    function-counters: ptr<long>
+    function-info: ptr<FunctionInfoTable>
+    ;Compiled Mode Tables
+    class-table: ptr<ClassDescriptor>
+    global-root-table: ptr<GlobalRoots>
+    stackmap-table: ptr<ptr<StackMap>>
+    stack-trace-table: ptr<StackTraceTable>
+    extern-table: ptr<ExternTable>
+    extern-defn-table: ptr<ExternDefnTable>
 
 lostanza deftype ExternTable :
   length: long
@@ -11146,6 +11188,303 @@ public defn PiggybackTimer (name:String, t:Timer) :
 public deftype TypeObject<T>
 public defmulti typeof?<?T> (x, t:TypeObject<?T>) -> True|False
 public defmulti name (t:TypeObject) -> String
+
+;============================================================
+;=================== Initialize Profiler ====================
+;============================================================
+
+#if-defined(BOOTSTRAP) :
+  lostanza defn initialize-profiler () -> ref<False> :
+    return false
+#else :
+  lostanza defn initialize-profiler () -> ref<False> :
+    val vms:ptr<VMState> = call-prim flush-vm()
+    [vms.profile-flag] = 0L
+    vms.profile-buffer = LSLongVector(1 << 20)
+    return false
+
+;============================================================
+;====================== Profiling ===========================
+;============================================================
+
+public defstruct ProfileInfo :
+  id : Int
+  package : String
+  name : String
+  info : FileInfo
+  count : Long
+
+public defstruct ProfileResult :
+  info : Tuple<ProfileInfo>
+  id-traces : Tuple<Tuple<Int>>
+
+defmethod print (o:OutputStream, c:ProfileInfo) :
+  print(o, "ProfileInfo(%_, %_, %_, %_)" % [id(c), package(c), name(c), info(c), count(c)])
+
+defn namestring (p:ProfileInfo) -> String :
+  to-string("%_/%_ %_ (%_)" % [package(p), name(p), info(p), id(p)])
+
+;Fast stack trace record lookup
+lostanza defn stack-trace-record (ret:long, trace-table:ptr<StackTraceTable>, trace-table-table:ref<HashTable<Long,Int>>) -> ptr<StackTraceRecord> :
+  val idx = get?(trace-table-table, new Long{ret}, new Int{-1})
+  if idx.value == -1 :
+    return null
+  else :
+    val entry = addr(trace-table.entries[idx.value])
+    return addr(entry.record)
+
+;Fast stack trace record table construction
+lostanza defn build-stack-trace-record-table (trace-table:ptr<StackTraceTable>) -> ref<HashTable<Long,Int>> :
+  val tab = HashTable<Long,Int>()
+  for (var i:int = 0, i < trace-table.length, i = i + 1) :
+    val entry = addr(trace-table.entries[i])
+    set(tab, new Long{entry.lbl as long}, new Int{i})
+  return tab
+
+#if-defined(BOOTSTRAP) :
+
+  defn collect-profiling () -> ProfileResult : ProfileResult([], [])
+  defn collect-coverage () -> Tuple<ProfileInfo> : []
+  public defn clear-profiling () : false
+  public defn clear-coverage () : false
+  defn do-start-sample-profiling (num-usecs:Int) : false
+  defn do-stop-sample-profiling () : false
+
+#else :
+
+  ;Called from app to record stack trace as return addresses in buffer
+  ;Demarcate end of each coroutine stack with -2 and end trace with -1
+  lostanza defn profile-stack-trace () -> ref<False> :
+    val vms:ptr<VMState> = call-prim flush-vm()
+    [vms.profile-flag] = 2L
+    val buffer = vms.profile-buffer
+    labels :
+      begin :
+        goto loop(current-coroutine)
+      loop (co:ref<RawCoroutine>) :
+        val stack = co.stack
+        val end-sp = stack.stack-pointer
+        labels :
+          begin : goto loop-frame(stack.frames)
+          loop-frame (sp:ptr<StackFrame>) :
+            if sp.return > 0L :
+              add(buffer, sp.return)
+            if sp < end-sp : ;Continue if we're not at the end of the stack
+              val map-index = sp.liveness-map
+              val stackmap = vms.stackmap-table[map-index]
+              goto loop-frame(sp + stackmap.size)
+        add(buffer, -2L) ;End coroutine stack marker
+        match(co.parent) :
+          (p:ref<RawCoroutine>) : goto loop(p)
+          (p:ref<False>) : ()
+    add(buffer, -1L) ;End stack trace marker 
+    [vms.profile-flag] = 0L
+    return false
+
+  ;Remove empty stack traces
+  defn prune-traces (traces:Vector<List<Int>>) -> List<List<Int>> :
+    to-list $ seq(unique, filter({ not empty?(_) }, traces))
+
+  ;Count all functions references in stack traces where traces have function ids in them
+  defn count-traces (len:Int, traces:Vector<Tuple<Int>>) -> Array<Long> :
+    val counts = Array<Long>(len, 0L)
+    for trace in traces do :
+      for id in trace do :
+        counts[id] = counts[id] + 1L
+    counts
+
+  ;Split stack trace buffer using delimiter 
+  defn split-buffer (buffer:List<Long>, delimiter:Long) -> List<List<Long>> :
+    let loop (i:Int = 0, buffers:List<List<Long>> = List(), ids:List<Long> = List()) :
+      if i < length(buffer) :
+        val id = buffer[i]
+        if id == delimiter :
+          loop(i + 1, cons(reverse(ids), buffers), List())
+        else :
+          loop(i + 1, buffers, cons(id, ids))
+      else :
+        reverse(buffers)
+
+  ;Split stack trace buffer using delimiter 
+  defn split-buffer (buffer:Tuple<Long>, delimiter:Long) -> Vector<Tuple<Long>> :
+    val res = Vector<Tuple<Long>>()
+    val chunk = Vector<Long>()
+    for id in buffer do :
+      if id == delimiter :
+        add(res, to-tuple(chunk))
+        clear(chunk)
+      else :
+        add(chunk, id)
+    res
+
+  ;Reconsititue full stack traces by splitting up chunks and ordering them properly
+  defn build-stack-traces (buffer:Tuple<Long>) -> Tuple<Tuple<Long>> :
+    val buffers = split-buffer(buffer, -1L)
+    ;same as:
+    ; to-tuple $ for trace in buffers seq : 
+    ;   to-tuple $ reverse $ to-list $ cat-all $ seq(reverse, split-buffer(trace, -2L))
+    to-tuple $ for (trace in buffers, k in 0 to false) seq : 
+      val res = Vector<Long>()
+      val chunks = split-buffer(trace, -2L) ;split full stack trace into coroutine stack traces
+      for i in (length(chunks) - 1) through 0 by -1 do :
+        val chunk = chunks[i]
+        for j in 0 to length(chunk) do :
+          add(res, chunk[j])
+      to-tuple(res)
+
+  ;Create function id traces and function info results after profiling
+  lostanza defn collect-profiling () -> ref<ProfileResult> :
+    val vms:ptr<VMState> = call-prim flush-vm()
+    val info:ptr<FunctionInfoTable> = vms.function-info
+    val counters:ptr<long> = vms.function-counters
+    val buffer:ptr<LSLongVector> = vms.profile-buffer
+    val tab = build-stack-trace-record-table(vms.stack-trace-table) ;For fast lookup of return addresses
+    val buffer* = Vector<Long>()
+
+    for (var i:long = 0, i < buffer.length, i = i + 1) :
+      add(buffer*, new Long{buffer.items[i]})
+
+    val traces = build-stack-traces(to-tuple(buffer*)) ;Order and concatenate stack trace chunks
+
+    ;Lookup stack trace records and then translate into function ids
+    val id-traces = Vector<Tuple<Int>>()
+    ; for (var i:long = 0, i < length(traces).value, i = i + 1) :
+    ;   val trace = get(traces, new Int{i as int})
+    ;   val trace* = Vector<Int>()
+    ;   for (var j:long = 0, j < length(trace).value, j = j + 1) :
+    ;     val ret = get(trace, new Int{j as int})
+    ;     val entry = stack-trace-record(ret.value, vms.stack-trace-table, tab)
+    ;     if entry != null :
+    ;       val id = entry.function
+    ;       if id != -1L :
+    ;         add(trace*, new Int{id as int})
+    ;   add(id-traces, to-tuple(trace*))
+
+    val len:long = info.length
+    val counts = count-traces(new Int{len as int}, id-traces)
+    val infos = Vector<ProfileInfo>()
+
+    ;Collect all FunctionInfos corresponding to ids that occurred on stack at least once
+    for (var i:long = 0L, i < len, i = i + 1) :
+      val entry = info.entries[i]
+      val fi = FileInfo(String(entry.file), new Int{entry.line}, new Int{entry.column})
+      val count = get(counts, new Int{i as int})
+      val package = String(entry.package)
+      val name = String(entry.name)
+      val ci = ProfileInfo(new Int{i as int}, package, name, fi, count)
+      add(infos, ci)
+
+    return ProfileResult(to-tuple(infos), to-tuple(id-traces))
+
+  ;Collect all coverage information from all functions
+  lostanza defn collect-coverage () -> ref<Vector<ProfileInfo>> :
+    val vms:ptr<VMState> = call-prim flush-vm()
+    val info:ptr<FunctionInfoTable> = vms.function-info
+    val counters:ptr<long> = vms.function-counters
+    val len:long = info.length
+    val res = Vector<ProfileInfo>()
+    for (var i:long = 0L, i < len, i = i + 1) :
+      val entry = info.entries[i]
+      val fi = FileInfo(String(entry.file), new Int{entry.line}, new Int{entry.column})
+      val count = new Long{counters[i]}
+      val package = String(entry.package)
+      val name = String(entry.name)
+      val ci = ProfileInfo(new Int{i as int}, package, name, fi, count)
+      add(res, ci)
+    return res
+
+  ;Clear profiling state ready for next run
+  public lostanza defn clear-profiling () -> ref<False> :
+    val vms:ptr<VMState> = call-prim flush-vm()
+    [vms.profile-flag] = 0L
+    vms.profile-buffer.length = 0
+    return false
+
+  ;Clear coverage state ready for next run
+  public lostanza defn clear-coverage () -> ref<False> :
+    val vms:ptr<VMState> = call-prim flush-vm()
+    val info:ptr<FunctionInfoTable> = vms.function-info
+    val counters:ptr<long> = vms.function-counters
+    val len:long = info.length
+    call-c clib/memset(counters, 0, len << 3L)
+    return false
+
+  var PROFILING-MSECS:Int = 0
+
+  ;Start profiling by initializing state and starting profile thread
+  ; extern start_sample_profiling: (int, long, ptr<long>, ptr<long>) -> int
+  lostanza defn do-start-sample-profiling (msecs:ref<Int>) -> ref<True|False> :
+    call-c clib/printf("DO START PROFILING\n")
+    val vms:ptr<VMState> = call-prim flush-vm()
+    [vms.profile-flag] = 0L
+    vms.profile-buffer.length = 0
+    PROFILING-MSECS = msecs
+    ; val res = call-c start_sample_profiling(msecs.value, vms.function-info.length, vms.profile-flag, vms.function-counters)
+    val res = 0
+    if res == 0 :
+      return false
+    else :
+      return true
+
+  ;Stop profiling by clearing state and stopping profile thread
+  ; extern stop_sample_profiling: () -> int 
+  lostanza defn do-stop-sample-profiling () -> ref<Int> :
+    call-c clib/printf("DO STOP PROFILING\n")
+    val vms:ptr<VMState> = call-prim flush-vm()
+    [vms.profile-flag] = 0L
+    ; call-c stop_sample_profiling()
+    return PROFILING-MSECS
+
+;dumps coverage results to given file
+;  must be stanza compiled with -coverage flag as well
+public defn dump-coverage (filename:String) :
+  val file = FileOutputStream(filename)
+  try :
+    val coverage = collect-coverage()
+    for elt in reverse(to-list(lazy-qsort(count, coverage))) do :
+      if count(elt) > 0L :
+        println(file, "%_: %_/%_ in %_ (%_)" % [count(elt), package(elt), name(elt), info(elt), id(elt)])
+  finally: close(file)
+
+;Coverage wrapper to be called with within which 
+;  runs thunk with coverage counting on and then dumps coverage report to file
+public defn coverage (f:() -> ?, filename:String) :
+  clear-coverage()
+  f()
+  dump-coverage(filename)
+
+; starts profiling sampling at msecs period 
+public defn start-profiling (msecs:Int) :
+  clear-profiling()
+  do-start-sample-profiling(msecs)
+  false
+
+;  dumps profiling results to given file
+;  must be stanza compiled with -profile flag as well
+public defn stop-profiling (filename:String) :
+  val msecs = do-stop-sample-profiling()
+  val profiling = collect-profiling()
+  if not empty?(info(profiling)) :
+    ; within (file) = with-output-file(filename) :
+    val file = FileOutputStream(filename)
+    try :
+      println(file, msecs)
+      println(file, "(")
+      do(println{file, _}, id-traces(profiling))
+      println(file, ")")
+      println(file, "(")
+      for (elt in info(profiling), i in 0 to false) do :
+        if count(elt) > 0L :
+          println(file, "(%_ %~)" % [id(elt), string-join $ [package(elt) "/" name(elt) ":" line(info(elt))]])
+      println(file, ")")
+    finally: close(file)
+  false
+
+;Profiling wrapper to be called with within
+public defn profiling (f:() -> ?, msecs:Int, filename:String) :
+  start-profiling(msecs)
+  f()
+  stop-profiling(filename)
 
 ;############################################################
 ;################## Math Package ############################
