@@ -51,6 +51,7 @@ public defstruct VMPackage :
   externs: Tuple<VMExtern>
   extern-defns: Tuple<VMExternDefn>
   debug-name-table: VMDebugNameTable
+  function-info: False|Tuple<FunctionInfo> with: (default => false)
   debug-table: VMDebugInfoTable
   safepoint-table: VMSafepointTable
 
@@ -996,11 +997,11 @@ defsyntax vmcode :
   defrule imm = (?x:#codeid) : x
 
   defproduction ins : VMIns
-  defrule ins = (?xs:#args = call ?f:#imm! (?ys:#imm! ...)) : CallIns(xs, f, to-tuple(ys), StackTraceInfo(`nopackage, false, add-base-dir(closest-info())))
-  defrule ins = (?xs:#args = call-c ?f:#imm! (?ys:#imm! ...)) : CallCIns(xs, f, to-tuple(ys), StackTraceInfo(`nopackage, false, add-base-dir(closest-info())))
-  defrule ins = (?xs:#args = call-closure ?f:#imm! (?ys:#imm! ...)) : CallClosureIns(xs, f, to-tuple(ys), StackTraceInfo(`nopackage, false, add-base-dir(closest-info())))
-  defrule ins = (?xs:#args = yield ?e:#enter? ?f:#imm! (?ys:#imm! ...)) : YieldIns(e, xs, f, to-tuple(ys), StackTraceInfo(`nopackage, false, add-base-dir(closest-info())))
-  defrule ins = ((?xs:#local ...) = alloc<?ts:#int! ...> (?sizes:#imm! ...)) : AllocIns(to-tuple(xs), to-tuple(ts), to-tuple(sizes), StackTraceInfo(`nopackage, false, add-base-dir(closest-info())))
+  defrule ins = (?xs:#args = call ?f:#imm! (?ys:#imm! ...)) : CallIns(xs, f, to-tuple(ys), StackTraceInfo(`nopackage, false, add-base-dir(closest-info()), false))
+  defrule ins = (?xs:#args = call-c ?f:#imm! (?ys:#imm! ...)) : CallCIns(xs, f, to-tuple(ys), StackTraceInfo(`nopackage, false, add-base-dir(closest-info()), false))
+  defrule ins = (?xs:#args = call-closure ?f:#imm! (?ys:#imm! ...)) : CallClosureIns(xs, f, to-tuple(ys), StackTraceInfo(`nopackage, false, add-base-dir(closest-info()), false))
+  defrule ins = (?xs:#args = yield ?e:#enter? ?f:#imm! (?ys:#imm! ...)) : YieldIns(e, xs, f, to-tuple(ys), StackTraceInfo(`nopackage, false, add-base-dir(closest-info()), false))
+  defrule ins = ((?xs:#local ...) = alloc<?ts:#int! ...> (?sizes:#imm! ...)) : AllocIns(to-tuple(xs), to-tuple(ts), to-tuple(sizes), StackTraceInfo(`nopackage, false, add-base-dir(closest-info()), false))
   defrule ins = (?x:#local = ?y:#imm[?z:#offset? ?o:#int!] ?c:#class?) : LoadIns(x, y, z, o, c)
   defrule ins = (?x:#imm[?y:#offset? ?o:#int!] = ?z:#imm! ?c:#class?) : StoreIns(x, y, o, z, c)
   defrule ins = (?x:#local = ?o:#op0) : Op0Ins(x, o)
@@ -1024,7 +1025,7 @@ defsyntax vmcode :
   defrule ins = (live (?xs:#local ...)) : RecordLiveIns(to-tuple(xs))
   defrule ins = (mark-live (?xs:#imm! ...)) : LiveIns(to-tuple(xs))
   defrule ins = (comment: ?x:#string!) : CommentIns(x)
-  defrule ins = (safepoint ?id:#int!) : SafepointIns(id, StackTraceInfo(`nopackage, false, add-base-dir(closest-info())))
+  defrule ins = (safepoint ?id:#int!) : SafepointIns(id, StackTraceInfo(`nopackage, false, add-base-dir(closest-info()), false))
   defrule ins = (match(?ys:#imm! ...) : (?bs:#vmbranch ... ?d:#defaultbranch)) : MatchIns(to-tuple(ys), to-tuple(bs), d)
   defrule ins = (dispatch(?ys:#imm! ...) : (?bs:#vmbranch ... ?d:#defaultbranch ?a:#ambbranch)) :
     DispatchIns(to-tuple(ys), to-tuple(bs), d, a)

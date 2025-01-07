@@ -537,10 +537,10 @@ lostanza defn print-stack-trace (stack:ptr<Stack>, vmtable:ref<VMTable>, livemap
 
 ;Print the stack buffer
 defn print-stack-buffer (buffer:Vector<StackTraceEntry>) -> False :
-  do(print-stack-entry, buffer)
+  do(print-stack-info, buffer)
 
 ;Print a single stack trace entry.
-defn print-stack-entry (e:StackTraceEntry) -> False :
+defn print-stack-info (e:StackTraceEntry) -> False :
   ;Print package and signature
   match(signature(e)) :
     (sig:String) : println(STANDARD-ERROR-STREAM, "  in %_/%_" % [package(e), sig])
@@ -572,7 +572,7 @@ defn add-entries (b:StackTraceBuilder, es:Seqable<StackTraceEntry>) :
 ;------------------------------------------------------------
 
 defn make-entry (ip:Long, sp:Long, st-info:StackTraceInfo) :
-  StackTraceEntry(ip, sp, package(st-info), signature(st-info), info(st-info))
+  StackTraceEntry(ip, sp, package(st-info), signature(st-info), info(st-info), function(st-info))
 
 lostanza defn collect-stack-trace-entries (stack:ptr<Stack>,
                                            vmtable:ref<VMTable>,

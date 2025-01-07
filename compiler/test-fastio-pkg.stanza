@@ -491,12 +491,12 @@ defserializer PkgSerializer (SKIP:True|False) :
     VMAbstractClass: (id:int, parents:tuple(int), children:tuple(int))
 
   defunion vmins (VMIns) :
-    CallIns: (xs:tuple(func-arg), f:vmimm, ys:tuple(vmimm), trace-entry:opt(trace-entry))
-    CallClosureIns: (xs:tuple(func-arg), f:vmimm, ys:tuple(vmimm), trace-entry:opt(trace-entry))
+    CallIns: (xs:tuple(func-arg), f:vmimm, ys:tuple(vmimm), trace-info:opt(trace-info))
+    CallClosureIns: (xs:tuple(func-arg), f:vmimm, ys:tuple(vmimm), trace-info:opt(trace-info))
     TCallIns: (f:vmimm, ys:tuple(vmimm))
     TCallClosureIns: (f:vmimm, ys:tuple(vmimm))
-    CallCIns: (xs:tuple(func-arg), f:vmimm, ys:tuple(vmimm), trace-entry:opt(trace-entry))
-    YieldIns: (enter?:bool, xs:tuple(func-arg), f:vmimm, ys:tuple(vmimm), trace-entry:opt(trace-entry))
+    CallCIns: (xs:tuple(func-arg), f:vmimm, ys:tuple(vmimm), trace-info:opt(trace-info))
+    YieldIns: (enter?:bool, xs:tuple(func-arg), f:vmimm, ys:tuple(vmimm), trace-info:opt(trace-info))
     SetIns: (x:vmimm as Local, y:vmimm)
     Op0Ins: (x:opt(vmimm as Local), op:vmop)
     Op1Ins: (x:opt(vmimm as Local), op:vmop, y:vmimm)
@@ -509,7 +509,7 @@ defserializer PkgSerializer (SKIP:True|False) :
     DispatchIns: (ys:tuple(vmimm), branches:tuple(vmbranch), default:int, amb:int)
     MatchIns: (ys:tuple(vmimm), branches:tuple(vmbranch), default:int)
     MethodDispatchIns: (multi:int, ys:tuple(vmimm), zs:tuple(vmimm), default:int, amb:int)
-    AllocIns: (xs:tuple(vmimm as Local), types:tuple(int), sizes:tuple(vmimm), trace-entry:opt(trace-entry))
+    AllocIns: (xs:tuple(vmimm as Local), types:tuple(int), sizes:tuple(vmimm), trace-info:opt(trace-info))
     StoreIns: (x:vmimm, y:opt(vmimm), offset:int, z:vmimm, class:opt(int))
     StoreWithBarrierIns: (x:vmimm, y:opt(vmimm), offset:int, z:vmimm, class:int)
     LoadIns: (x:vmimm as Local, y:vmimm, z:opt(vmimm), offset:int, class:opt(int))
@@ -583,7 +583,7 @@ defserializer PkgSerializer (SKIP:True|False) :
     DerefOp: ()
     CRSPOp: ()
 
-  deftype trace-entry (StackTraceEntry) : (package:symbol, signature:opt(string), info:opt(info))
+  deftype trace-info (StackTraceInfo) : (package:symbol, signature:opt(string), info:opt(info))
 
   ;========================
   ;==== Assembly Types ====

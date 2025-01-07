@@ -5,7 +5,7 @@ defpackage stz/utils :
    import collections
    import stz/algorithms
    import core/sha256
-   import core/stack-trace
+   import stz/trace-info
 
 ;============================================================
 ;===================== Radix Conversions ====================
@@ -530,4 +530,4 @@ public defn EmptyMTItem () :
   MTItem<Void>(-1, List())
 
 public defstruct FunctionInfo :
-  info : StackTraceEntry
+  info : StackTraceInfo

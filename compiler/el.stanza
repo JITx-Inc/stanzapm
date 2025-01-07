@@ -221,7 +221,7 @@ defn fill-stack-trace-entries (epackage:EPackage) -> EPackage :
   defn add-context (context:StackTraceContext, info:TraceInfo) -> TraceInfo :
     match(signature?(context), info) :
       (sig:False, info:False) : false
-      (sig:String|False, info:AbsoluteFileInfo|False) : StackTraceInfo(package(context), sig, info)
+      (sig:String|False, info:AbsoluteFileInfo|False) : StackTraceInfo(package(context), sig, info, false)
 
   ;Launch!
   val result = fill-entry(epackage, TopLevel(name(epackage))) as EPackage
@@ -1752,7 +1752,7 @@ defn inline-call (buffer:BodyBuffer,
           ;original safepoint.
           match(call-info, info?(i)) :
             (call-info:StackTraceInfo, instruction-info:StackTraceInfo):
-              val info = StackTraceInfo(package(call-info), signature(call-info), info(instruction-info))
+              val info = StackTraceInfo(package(call-info), signature(call-info), info(instruction-info), false)
               emit(buffer, ESafepoint(group-id(i), info))
             (call-info, instruction-info):
               emit(buffer, i)
@@ -2141,24 +2141,24 @@ defn insert-profiling (epackage:EPackage, coverage?:True|False) :
   val infos    = Vector<FunctionInfo>()
   val iotable  = IOTable(packageio(epackage))
   val num-uses = IntTable<Int>(0)
-  defn get-info (sinfo:False|TraceInfo, body:EBody) -> False|StackTraceEntry :
+  defn get-info (sinfo:False|TraceInfo, body:EBody) -> False|StackTraceInfo :
     match(sinfo) :
-      (sinfo: StackTraceEntry) : sinfo
+      (sinfo: StackTraceInfo) : sinfo
       (sinfo) :
-        label<False|StackTraceEntry> return :
+        label<False|StackTraceInfo> return :
           for i in ins(body) do :
             match(info?(i)) :
-              (info:StackTraceEntry) : return(info)
+              (info:StackTraceInfo) : return(info)
               (info) : false
           
-  defn insert (e:EBody, sinfo:StackTraceEntry, insert?:True|False) -> EBody :
+  defn insert (e:EBody, sinfo:StackTraceInfo, insert?:True|False) -> EBody :
     val buffer = BodyBuffer(e)
     val id = length(infos)
     emit(buffer, EProfile(id, 1 when coverage? else 0)) when insert?
     for i in ins(e) do :
       val i* =
         match(info?(i)) :
-          (info:StackTraceEntry) : sub-info(i, sub-function(info, id))
+          (info:StackTraceInfo) : sub-info(i, sub-function(info, id))
           (info) : i
       emit(buffer, i*)
       if insert? and not coverage? :
@@ -2175,7 +2175,7 @@ defn insert-profiling (epackage:EPackage, coverage?:True|False) :
       (e:EFn) : 
         ; println("%_ INFO %_" % [length(infos), get-info(info(e), body(e))])
         match(get-info(info(e), body(e))) :
-          (i:StackTraceEntry) : sub-body(e, insert(body(e), i, insert?))
+          (i:StackTraceInfo) : sub-body(e, insert(body(e), i, insert?))
           (i:False) : e
       (e) : e
 

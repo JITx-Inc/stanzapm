@@ -183,6 +183,7 @@ lostanza deftype PackedStackTraceRecord :
   file:int
   line:int
   column:int
+  function:int
 
 ;------------------------------------------------------------
 ;--------------------- Accessors ----------------------------

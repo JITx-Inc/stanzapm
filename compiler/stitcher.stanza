@@ -969,7 +969,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
       match(signature(info(fun-info))) :
         (s:String) : E $ DefLabel(string-lbls[s])
         (f:False) : E $ DefLong(0L)
-      val file-info = info(info(fun-info)) as FileInfo
+      val file-info = info(info(fun-info)) as AbsoluteFileInfo
       E $ DefLabel(string-lbls[filename(file-info)])
       E $ DefInt(line(file-info))
       E $ DefInt(column(file-info))
