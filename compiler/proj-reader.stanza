@@ -128,7 +128,8 @@ defsyntax stanza-projfile :
                   entry?(bs, `flags)
                   entry?(bs, `optimize, false)
                   entry?(bs, `profile, false)
-                  entry?(bs, `coverage, false))
+                  entry?(bs, `coverage, false)
+                  )
 
   defrule projstmt = (var ?name:#symbol! = ?v:#projvalue!) :
     VarStmtS0(closest-info(), name, v)
