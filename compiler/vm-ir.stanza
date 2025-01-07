@@ -32,7 +32,8 @@ public val EXTEND-HEAP-FN = 0
 public val EXTEND-STACK-FN = 1
 public val INIT-CONSTS-FN = 2
 public val EXECUTE-TOPLEVEL-COMMAND-FN = 3
-public val NUM-BUILTIN-FNS = 4
+public val PROFILE-STACK-TRACE-FN = 4
+public val NUM-BUILTIN-FNS = 5
 
 ;============================================================
 ;================== Design of Instructions ==================

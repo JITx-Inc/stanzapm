@@ -924,11 +924,13 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
           E $ DefLabel(string-lbls[filename(info)])
           E $ DefInt(line(info))
           E $ DefInt(column(info))
+          E $ DefLong(-1L when (function(trace-entry) is False) else to-long(function(trace-entry) as Int))
         (f:False) :
           E $ DefLong(0L)
           E $ DefLong(0L)
           E $ DefInt(0)
           E $ DefInt(0)
+          E $ DefLong(-1L)
     E $ DefText()
     E $ Comment("End of File Information Table")  
 

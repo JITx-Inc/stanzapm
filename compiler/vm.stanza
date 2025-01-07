@@ -574,7 +574,7 @@ defn add-entries (b:StackTraceBuilder, es:Seqable<StackTraceEntry>) :
 ;------------------------------------------------------------
 
 defn make-entry (ip:Long, sp:Long, st-info:StackTraceInfo) :
-  StackTraceEntry(ip, sp, package(st-info), signature(st-info), info(st-info))
+  StackTraceEntry(ip, sp, package(st-info), signature(st-info), info(st-info), function(st-info))
 
 lostanza defn collect-stack-trace-entries (stack:ptr<Stack>,
                                            vmtable:ref<VMTable>,

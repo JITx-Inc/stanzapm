@@ -560,10 +560,21 @@ lostanza defn print-stack-trace (stack:ref<Stack>) -> ref<False> :
     val frame = buffer.items[i] as ptr<StackFrame>
     val entry = stack-trace-record(frame, stack-trace-table)
     if entry != null :
+      call-c clib/fprintf(current-err, "lbl 0x%lx: " frame.return)
       print-record(entry)
 
   ;Free the buffer
   free(buffer)
+  return false
+
+public lostanza defn print-stack-trace-table () -> ref<False> :
+  val vms:ptr<VMState> = call-prim flush-vm()
+  val trace-table = vms.stack-trace-table
+  for (var i:int = 0, i < trace-table.length, i = i + 1) :
+    val e = addr(trace-table.entries[i])
+    call-c clib/fprintf(current-err, "lbl 0x%lx: " e.lbl)
+    val r = addr(e.record)
+    call-c clib/printf("P %s S %s B %s F %s L %d C %d F %d\n", r.package, r.signature, r.base, r.file, r.line, r.column, r.function)
   return false
 
 lostanza defn print-record (record:ptr<StackTraceRecord>) -> ref<False> :

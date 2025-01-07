@@ -2158,8 +2158,7 @@ defn insert-profiling (epackage:EPackage, coverage?:True|False) :
     for i in ins(e) do :
       val i* =
         match(info?(i)) :
-          ; (info:StackTraceInfo) : sub-info(i, sub-function(info, id))
-          (info:StackTraceInfo) : i
+          (info:StackTraceInfo) : sub-info(i, sub-function(info, id))
           (info) : i
       emit(buffer, i*)
       if insert? and not coverage? :
