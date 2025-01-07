@@ -99,6 +99,8 @@ protected-when(TESTING) defn analyze-input (input:DefsDbInput) -> DependencyResu
     true,                                   ;build-from-source?
     optimize?(input),                       ;optimize?
     false,                                  ;debug?
+    false,                                  ;profile?
+    false,                                  ;coverage?
     [],                                     ;ccfiles
     [],                                     ;ccflags
     flags(input)                            ;flags

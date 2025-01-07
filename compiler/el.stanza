@@ -31,17 +31,17 @@ defpackage stz/el :
 ;==================== Drivers ===============================
 ;============================================================
 
-public defn lower-optimized (epackages:Tuple<EPackage>) -> EPackage :
+public defn lower-optimized (epackages:Tuple<EPackage>, profile?:True|False, coverage?:True|False) -> EPackage :
   vprintln("EL: Lower optimized packages: %," % [seq(name, epackages)])
   val epackages* = map(fill-stack-trace-entries, epackages)
   ;do(dump{_, "logs", "input"}, epackages*)
   val collapsed = collapse(epackages*)
   ;dump(collapsed, "logs", "collapsed")
-  lower(collapsed, true)
+  lower(collapsed, true, profile?, coverage?)
 
-public defn lower-unoptimized (epackage:EPackage) -> EPackage :
+public defn lower-unoptimized (epackage:EPackage, profile?:True|False, coverage?:True|False) -> EPackage :
   vprintln("EL: Lower unoptimized package: %_" % [name(epackage)])
-  lower(fill-stack-trace-entries(epackage), false)
+  lower(fill-stack-trace-entries(epackage), false, profile?, coverage?)
 
 ;============================================================
 ;===================== Timers ===============================
@@ -56,7 +56,7 @@ val EL-TIMERS = within pass-name = HashTable-init<String,TimerLabel>() :
 ;========================= Lowering =========================
 ;============================================================
 
-defn lower (epackage:EPackage, optimize?:True|False) -> EPackage :
+defn lower (epackage:EPackage, optimize?:True|False, profile?:True|False, coverage?:True|False) -> EPackage :
   val lower-timer-name = to-string("EL-LOWER -- %_" % [name(epackage)])
   within log-time(EL-LOWER, lower-timer-name) :
 
