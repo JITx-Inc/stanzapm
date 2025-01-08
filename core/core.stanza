@@ -11359,17 +11359,17 @@ lostanza defn build-stack-trace-record-table (trace-table:ptr<StackTraceTable>) 
 
     ;Lookup stack trace records and then translate into function ids
     val id-traces = Vector<Tuple<Int>>()
-    ; for (var i:long = 0, i < length(traces).value, i = i + 1) :
-    ;   val trace = get(traces, new Int{i as int})
-    ;   val trace* = Vector<Int>()
-    ;   for (var j:long = 0, j < length(trace).value, j = j + 1) :
-    ;     val ret = get(trace, new Int{j as int})
-    ;     val entry = stack-trace-record(ret.value, vms.stack-trace-table, tab)
-    ;     if entry != null :
-    ;       val id = entry.function
-    ;       if id != -1L :
-    ;         add(trace*, new Int{id as int})
-    ;   add(id-traces, to-tuple(trace*))
+    for (var i:long = 0, i < length(traces).value, i = i + 1) :
+      val trace = get(traces, new Int{i as int})
+      val trace* = Vector<Int>()
+      for (var j:long = 0, j < length(trace).value, j = j + 1) :
+        val ret = get(trace, new Int{j as int})
+        val entry = stack-trace-record(ret.value, vms.stack-trace-table, tab)
+        if entry != null :
+          val id = entry.function
+          if id != -1L :
+            add(trace*, new Int{id as int})
+      add(id-traces, to-tuple(trace*))
 
     val len:long = info.length
     val counts = count-traces(new Int{len as int}, id-traces)
@@ -11423,27 +11423,26 @@ lostanza defn build-stack-trace-record-table (trace-table:ptr<StackTraceTable>) 
   var PROFILING-MSECS:Int = 0
 
   ;Start profiling by initializing state and starting profile thread
-  ; extern start_sample_profiling: (int, long, ptr<long>, ptr<long>) -> int
+  extern start_sample_profiling: (int, long, ptr<long>, ptr<long>) -> int
   lostanza defn do-start-sample-profiling (msecs:ref<Int>) -> ref<True|False> :
     call-c clib/printf("DO START PROFILING\n")
     val vms:ptr<VMState> = call-prim flush-vm()
     [vms.profile-flag] = 0L
     vms.profile-buffer.length = 0
     PROFILING-MSECS = msecs
-    ; val res = call-c start_sample_profiling(msecs.value, vms.function-info.length, vms.profile-flag, vms.function-counters)
-    val res = 0
+    val res = call-c start_sample_profiling(msecs.value, vms.function-info.length, vms.profile-flag, vms.function-counters)
     if res == 0 :
       return false
     else :
       return true
 
   ;Stop profiling by clearing state and stopping profile thread
-  ; extern stop_sample_profiling: () -> int 
+  extern stop_sample_profiling: () -> int 
   lostanza defn do-stop-sample-profiling () -> ref<Int> :
     call-c clib/printf("DO STOP PROFILING\n")
     val vms:ptr<VMState> = call-prim flush-vm()
     [vms.profile-flag] = 0L
-    ; call-c stop_sample_profiling()
+    call-c stop_sample_profiling()
     return PROFILING-MSECS
 
 ;dumps coverage results to given file
