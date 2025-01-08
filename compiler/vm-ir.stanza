@@ -51,8 +51,8 @@ public defstruct VMPackage :
   externs: Tuple<VMExtern>
   extern-defns: Tuple<VMExternDefn>
   debug-name-table: VMDebugNameTable
-  function-info: False|Tuple<FunctionInfo> with: (default => false)
   debug-table: VMDebugInfoTable
+  function-info: False|Tuple<FunctionInfo> with: (default => false)
   safepoint-table: VMSafepointTable
 
 ;A value that can be accessed directly within an instruction.

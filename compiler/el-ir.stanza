@@ -1312,7 +1312,7 @@ defmethod map<?T> (f:ELItem -> ELItem, item:ELItem&?T) -> ELItem&T :
     (t:EBot) : t
 
     ;EPackage
-    (e:EPackage) : EPackage(packageio(e), h(exps(e)))
+    (e:EPackage) : EPackage(packageio(e), h(exps(e)), function-info(e))
 
     ;ETExps
     (e:EDefGlobal) : EDefGlobal(n(e), h(type(e)), mutable?(e), lostanza?(e))

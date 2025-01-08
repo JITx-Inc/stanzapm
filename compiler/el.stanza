@@ -2173,7 +2173,6 @@ defn insert-profiling (epackage:EPackage, coverage?:True|False) :
   defn insert-texp (t:ELBigItem, insert?:True|False) -> ELBigItem :
     match(map(insert-texp{_, insert?}, t)) :
       (e:EFn) : 
-        ; println("%_ INFO %_" % [length(infos), get-info(info(e), body(e))])
         match(get-info(info(e), body(e))) :
           (i:StackTraceInfo) : sub-body(e, insert(body(e), i, insert?))
           (i:False) : e

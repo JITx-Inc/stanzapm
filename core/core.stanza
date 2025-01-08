@@ -4246,6 +4246,20 @@ protected val uninitialized = new Uninitialized
   val NL = "\n"
 
 ;============================================================
+;=================== Initialize Profiler ====================
+;============================================================
+
+#if-defined(BOOTSTRAP) :
+  lostanza defn initialize-profiler () -> ref<False> :
+    return false
+#else :
+  lostanza defn initialize-profiler () -> ref<False> :
+    val vms:ptr<VMState> = call-prim flush-vm()
+    [vms.profile-flag] = 0L
+    vms.profile-buffer = LSLongVector(1 << 20)
+    return false
+
+;============================================================
 ;=================== Initialize Remaining ===================
 ;============================================================
 
@@ -4256,6 +4270,7 @@ initialize-gc-notifiers()
 initialize-gc-statistics()
 initialize-liveness-handlers()
 initialize-symbol-table()
+initialize-profiler()
 
 ;================================================================================
 ;========================== End of Boot Sequence ================================
@@ -11201,20 +11216,6 @@ public defmulti typeof?<?T> (x, t:TypeObject<?T>) -> True|False
 public defmulti name (t:TypeObject) -> String
 
 ;============================================================
-;=================== Initialize Profiler ====================
-;============================================================
-
-#if-defined(BOOTSTRAP) :
-  lostanza defn initialize-profiler () -> ref<False> :
-    return false
-#else :
-  lostanza defn initialize-profiler () -> ref<False> :
-    val vms:ptr<VMState> = call-prim flush-vm()
-    [vms.profile-flag] = 0L
-    vms.profile-buffer = LSLongVector(1 << 20)
-    return false
-
-;============================================================
 ;====================== Profiling ===========================
 ;============================================================
 
@@ -11425,7 +11426,6 @@ lostanza defn build-stack-trace-record-table (trace-table:ptr<StackTraceTable>) 
   ;Start profiling by initializing state and starting profile thread
   extern start_sample_profiling: (int, long, ptr<long>, ptr<long>) -> int
   lostanza defn do-start-sample-profiling (msecs:ref<Int>) -> ref<True|False> :
-    call-c clib/printf("DO START PROFILING\n")
     val vms:ptr<VMState> = call-prim flush-vm()
     [vms.profile-flag] = 0L
     vms.profile-buffer.length = 0
@@ -11439,7 +11439,6 @@ lostanza defn build-stack-trace-record-table (trace-table:ptr<StackTraceTable>) 
   ;Stop profiling by clearing state and stopping profile thread
   extern stop_sample_profiling: () -> int 
   lostanza defn do-stop-sample-profiling () -> ref<Int> :
-    call-c clib/printf("DO STOP PROFILING\n")
     val vms:ptr<VMState> = call-prim flush-vm()
     [vms.profile-flag] = 0L
     call-c stop_sample_profiling()
