@@ -861,11 +861,10 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
     E $ Comment("Heap Statistics Table")
     E $ DefData()
     E $ Label(/heap-statistics(stubs))
+    E $ DefLong(to-long(num-concrete-classes))
     for i in 0 to num-concrete-classes do :
       E $ DefLong(0L) ; num-uses
       E $ DefLong(0L) ; num-bytes
-    E $ DefLong(to-long(num-concrete-classes))
-    E $ DefLong(-1L)  ; mark end of table
     E $ DefText()
     E $ Comment("End of Heap Statistics Table")
 
