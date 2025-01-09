@@ -1,0 +1,330 @@
+;See License.txt for details about licensing.
+#use-added-syntax(fastio-serializer)
+defpackage profiler :
+  import core
+  import collections
+  import core/stack-trace
+  import core/long-vector
+  import stz/fastio-buffer
+  import stz/fastio-runtime
+
+public defstruct ProfileInfo :
+  id : Int
+  package : String
+  name : String
+  info : FileInfo
+  count : Long
+with:
+  printer => true
+
+public defstruct ProfileResult :
+  info : Tuple<ProfileInfo>
+  id-traces : Tuple<Tuple<Int>>
+  msecs : Int
+with:
+  printer => true
+
+defmethod print (o:OutputStream, c:ProfileInfo) :
+  print(o, "ProfileInfo(%_, %_, %_, %_)" % [id(c), package(c), name(c), info(c), count(c)])
+
+public defn serialize-profile-result (filename:String, res:ProfileResult) -> False :
+  write-to-file(filename,
+                ProfileResultSerializer(),
+                serialize-profileresult,
+                res)
+
+public defn deserialize-profile-result (filename:String) -> ProfileResult :
+  read-from-file(filename,
+                 ProfileResultSerializer(),
+                 deserialize-profileresult)
+
+defserializer ProfileResultSerializer () :
+  entry-points: (profileresult)
+
+  include "../compiler/serializer-primitives.spec"
+
+  deftype profileinfo (ProfileInfo) :
+    id:int
+    package:string
+    name:string
+    info:info
+    count:long
+
+  deftype profileresult (ProfileResult) :
+    info:tuple(profileinfo)
+    id-traces:tuple(tuple(int))
+    msecs:int
+
+
+ ;Fast stack trace record lookup
+lostanza defn stack-trace-record (ret:long, trace-table:ptr<core/StackTraceTable>, trace-table-table:ref<HashTable<Long,Int>>) -> ptr<StackTraceRecord> :
+  val idx = get?(trace-table-table, new Long{ret}, new Int{-1})
+  if idx.value == -1 :
+    return null
+  else :
+    val entry = addr(trace-table.entries[idx.value])
+    return addr(entry.record)
+
+;Fast stack trace record table construction
+lostanza defn build-stack-trace-record-table (trace-table:ptr<core/StackTraceTable>) -> ref<HashTable<Long,Int>> :
+  val tab = HashTable<Long,Int>()
+  for (var i:int = 0, i < trace-table.length, i = i + 1) :
+    val entry = addr(trace-table.entries[i])
+    set(tab, new Long{entry.lbl as long}, new Int{i})
+  return tab
+
+#if-defined(BOOTSTRAP) :
+
+  defn collect-profiling () -> ProfileResult : ProfileResult([], [])
+  defn collect-coverage () -> Tuple<ProfileInfo> : []
+  public defn clear-profiling () : false
+  public defn clear-coverage () : false
+  defn do-start-sample-profiling (num-usecs:Int) : false
+  defn do-stop-sample-profiling () : false
+
+#else :
+
+  ;Remove empty stack traces
+  defn prune-traces (traces:Vector<List<Int>>) -> List<List<Int>> :
+    to-list $ seq(unique, filter({ not empty?(_) }, traces))
+
+  ;Count all functions references in stack traces where traces have function ids in them
+  defn count-traces (len:Int, traces:Vector<Tuple<Int>>) -> Array<Long> :
+    val counts = Array<Long>(len, 0L)
+    for trace in traces do :
+      for id in trace do :
+        counts[id] = counts[id] + 1L
+    counts
+
+  ;Split stack trace buffer using delimiter 
+  defn split-buffer (buffer:List<Long>, delimiter:Long) -> List<List<Long>> :
+    let loop (i:Int = 0, buffers:List<List<Long>> = List(), ids:List<Long> = List()) :
+      if i < length(buffer) :
+        val id = buffer[i]
+        if id == delimiter :
+          loop(i + 1, cons(reverse(ids), buffers), List())
+        else :
+          loop(i + 1, buffers, cons(id, ids))
+      else :
+        reverse(buffers)
+
+  ;Split stack trace buffer using delimiter 
+  defn split-buffer (buffer:Tuple<Long>, delimiter:Long) -> Vector<Tuple<Long>> :
+    val res = Vector<Tuple<Long>>()
+    val chunk = Vector<Long>()
+    for id in buffer do :
+      if id == delimiter :
+        add(res, to-tuple(chunk))
+        clear(chunk)
+      else :
+        add(chunk, id)
+    res
+
+  ;Reconsititue full stack traces by splitting up chunks and ordering them properly
+  defn build-stack-traces (buffer:Tuple<Long>) -> Tuple<Tuple<Long>> :
+    val buffers = split-buffer(buffer, -1L)
+    ;same as:
+    ; to-tuple $ for trace in buffers seq : 
+    ;   to-tuple $ reverse $ to-list $ cat-all $ seq(reverse, split-buffer(trace, -2L))
+    to-tuple $ for (trace in buffers, k in 0 to false) seq : 
+      val res = Vector<Long>()
+      val chunks = split-buffer(trace, -2L) ;split full stack trace into coroutine stack traces
+      for i in (length(chunks) - 1) through 0 by -1 do :
+        val chunk = chunks[i]
+        for j in 0 to length(chunk) do :
+          add(res, chunk[j])
+      to-tuple(res)
+
+  ;Create function id traces and function info results after profiling
+  lostanza defn collect-profiling (msecs:ref<Int>) -> ref<ProfileResult> :
+    val vms:ptr<core/VMState> = call-prim flush-vm()
+    val info:ptr<core/FunctionInfoTable> = vms.function-info
+    val counters:ptr<long> = vms.function-counters
+    val buffer:ptr<LSLongVector> = vms.profile-buffer as ptr<LSLongVector>
+    val id-traces = Vector<Tuple<Int>>()
+    val infos = Vector<ProfileInfo>()
+
+    if info.length > 0L :
+
+      val tab = build-stack-trace-record-table(vms.stack-trace-table) ;For fast lookup of return addresses
+      val buffer* = Vector<Long>()
+
+      for (var i:long = 0, i < buffer.length, i = i + 1) :
+        add(buffer*, new Long{buffer.items[i]})
+
+      val traces = build-stack-traces(to-tuple(buffer*)) ;Order and concatenate stack trace chunks
+
+      ;Lookup stack trace records and then translate into function ids
+      for (var i:long = 0, i < length(traces).value, i = i + 1) :
+        val trace = get(traces, new Int{i as int})
+        val trace* = Vector<Int>()
+        for (var j:long = 0, j < length(trace).value, j = j + 1) :
+          val ret = get(trace, new Int{j as int})
+          val entry = stack-trace-record(ret.value, vms.stack-trace-table, tab)
+          if entry != null :
+            val id = entry.function
+            if id != -1L :
+              add(trace*, new Int{id as int})
+        add(id-traces, to-tuple(trace*))
+
+      val len:long = info.length
+      val counts = count-traces(new Int{len as int}, id-traces)
+
+      ;Collect all FunctionInfos corresponding to ids that occurred on stack at least once
+      for (var i:long = 0L, i < len, i = i + 1) :
+        val entry = info.entries[i]
+        val fi = FileInfo(String(entry.file), new Int{entry.line}, new Int{entry.column})
+        val count = get(counts, new Int{i as int})
+        if count.value > 0L :
+          val package = String(entry.package)
+          val name = String(entry.name)
+          val ci = ProfileInfo(new Int{i as int}, package, name, fi, count)
+          add(infos, ci)
+
+    return ProfileResult(to-tuple(infos), to-tuple(id-traces), msecs)
+
+  ;Collect all coverage information from all functions
+  lostanza defn collect-coverage () -> ref<Vector<ProfileInfo>> :
+    val vms:ptr<core/VMState> = call-prim flush-vm()
+    val info:ptr<core/FunctionInfoTable> = vms.function-info
+    val counters:ptr<long> = vms.function-counters
+    val len:long = info.length
+    val res = Vector<ProfileInfo>()
+    for (var i:long = 0L, i < len, i = i + 1) :
+      val entry = info.entries[i]
+      val fi = FileInfo(String(entry.file), new Int{entry.line}, new Int{entry.column})
+      val count = new Long{counters[i]}
+      val package = String(entry.package)
+      val name = String(entry.name)
+      val ci = ProfileInfo(new Int{i as int}, package, name, fi, count)
+      add(res, ci)
+    return res
+
+  ;Clear profiling state ready for next run
+  public lostanza defn clear-profiling () -> ref<False> :
+    val vms:ptr<core/VMState> = call-prim flush-vm()
+    [vms.profile-flag] = 0L
+    vms.profile-buffer.length = 0
+    return false
+
+  ;Clear coverage state ready for next run
+  public lostanza defn clear-coverage () -> ref<False> :
+    val vms:ptr<core/VMState> = call-prim flush-vm()
+    val info:ptr<core/FunctionInfoTable> = vms.function-info
+    val counters:ptr<long> = vms.function-counters
+    val len:long = info.length
+    call-c clib/memset(counters, 0, len << 3L)
+    return false
+
+  var PROFILING-MSECS:Int = 0
+
+  ;Start profiling by initializing state and starting profile thread
+  extern start_sample_profiling: (int, long, ptr<long>, ptr<long>) -> int
+  lostanza defn do-start-sample-profiling (msecs:ref<Int>) -> ref<True|False> :
+    val vms:ptr<core/VMState> = call-prim flush-vm()
+    [vms.profile-flag] = 0L
+    vms.profile-buffer.length = 0
+    PROFILING-MSECS = msecs
+    val res = call-c start_sample_profiling(msecs.value, vms.function-info.length, vms.profile-flag, vms.function-counters)
+    if res == 0 :
+      return false
+    else :
+      return true
+
+  ;Stop profiling by clearing state and stopping profile thread
+  extern stop_sample_profiling: () -> int 
+  lostanza defn do-stop-sample-profiling () -> ref<Int> :
+    val vms:ptr<core/VMState> = call-prim flush-vm()
+    [vms.profile-flag] = 0L
+    call-c stop_sample_profiling()
+    return PROFILING-MSECS
+
+;dumps coverage results to given file
+;  must be stanza compiled with -coverage flag as well
+public defn dump-coverage (filename:String) :
+  val file = FileOutputStream(filename)
+  try :
+    val coverage = collect-coverage()
+    for elt in reverse(to-list(lazy-qsort(count, coverage))) do :
+      if count(elt) > 0L :
+        println(file, "%_: %_/%_ in %_ (%_)" % [count(elt), package(elt), name(elt), info(elt), id(elt)])
+  finally: close(file)
+
+;Coverage wrapper to be called with within which 
+;  runs thunk with coverage counting on and then dumps coverage report to file
+public defn coverage (f:() -> ?, filename:String) :
+  clear-coverage()
+  f()
+  dump-coverage(filename)
+
+; starts profiling sampling at msecs period 
+public defn start-profiling (msecs:Int) :
+  clear-profiling()
+  do-start-sample-profiling(msecs)
+  false
+
+;  dumps profiling results to given file
+;  must be stanza compiled with -profile flag as well
+public defn stop-profiling () -> ProfileResult:
+  collect-profiling(do-stop-sample-profiling())
+
+;Profiling wrapper to be called with within
+public defn profiling (f:() -> ?, msecs:Int) :
+  start-profiling(msecs)
+  f()
+  stop-profiling()
+
+;;; convert to flame-graph format using traditional stack-collapse function
+
+;These functions clog up flame graph so filter them out
+val default-silence-prefixes = [
+  "core/do"
+  "core/seq"
+  "core/map"
+  "core/with-exception-handler"
+  "core/setup-coroutine"
+  "core/with-finally"
+  "core/dynamic-wind"
+  "core/wrap-length"
+  "core/repeat-while"
+  ]
+
+defn namestring (pi:ProfileInfo) -> String :
+  string-join $ [package(pi) "/" name(pi) ":" line(info(pi))]
+
+defn with-output-file-stream<?T> (f: FileOutputStream -> ?T, file:FileOutputStream) -> T :
+  try : f(file)
+  finally : close(file)
+
+public defn stack-collapse (res:ProfileResult, filename:String, top?:True|False = false, depth:Int = 1, silence-prefixes:Tuple<String> = default-silence-prefixes) :
+  val strings = IntTable<String>()
+  val silence-ids = IntSet()
+  for elt in info(res) do :
+    val decl = namestring(elt)
+    strings[id(elt)] = decl
+    for p in silence-prefixes do :
+      add(silence-ids, id(elt)) when prefix?(decl, p)
+  within (file) = with-output-file-stream(FileOutputStream(filename)) :
+    if top? :
+      val tops = IntTable<Int>(0)
+      for trace in id-traces(res) do :
+        val len = length(trace)
+        for off in 1 through 2 do :
+          val idx = len - off
+          if idx >= 0 :
+            val id = trace[idx]
+            tops[id] = tops[id] + 1
+      val tops* = reverse $ to-list $ lazy-qsort(value, tops)
+      for top in tops* do :
+        println(file, "%_: %_" % [value(top) * msecs(res), strings[key(top)]])
+    else :
+      for trace in id-traces(res) do :
+        var first?:True|False = true
+        for record in trace do :
+          if not silence-ids[record] :
+            print(file, ";") when not first?
+            print(file, strings[record])
+            first? = false
+        print(file, " ")
+        println(file, msecs(res))
+
