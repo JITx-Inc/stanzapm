@@ -6,6 +6,7 @@ defpackage stz/main :
   import reader
   import arg-parser
   import line-wrap
+  import profiler
   import stz/compiler
   import stz/params
   import stz/config
@@ -60,6 +61,18 @@ val READ-CONFIG-FILE = TimerLabel("Read config file")
 defn run-with-timing-log<?T> (body:() -> ?T, cmd-args:CommandArgs) -> T :
   if flag?(cmd-args, "timing-log") :
     create-timing-log(body, cmd-args["timing-log"])
+  else :
+    body()
+
+;============================================================
+;=================== profile-compiler =======================
+;============================================================
+
+;If -profile-compiler flag is provided, then execute the body
+;with support for profiling.
+defn run-with-profiler<?T> (body:() -> ?T, cmd-args:CommandArgs) -> T :
+  if flag?(cmd-args, "profile-compiler") :
+    profiling(body, 100, { stack-collapse(_, cmd-args["profile-compiler"]) })
   else :
     body()
 
@@ -251,6 +264,8 @@ val COMMON-STANZA-FLAGS = [
     "The name of the output external dependencies file.")
   Flag("timing-log", OneFlag, OptionalFlag,
     "If provided, the filename of the timing log to generate.")
+  Flag("profile-compiler", OneFlag, OptionalFlag,
+    "If provided, the filename of the flame-graph to generate.")
   Flag("macros", AtLeastOneFlag, OptionalFlag,
     "If provided, the filename of the macro plugin.")]
 
@@ -346,15 +361,16 @@ defn compile-command () :
         symbol?("link"))
 
     ;Launch!
-    within run-with-timing-log(cmd-args) :
-      within run-with-verbose-flag(cmd-args) :
-        compile(build-settings(), build-system())
+    within run-with-profiler(cmd-args) :
+      within run-with-timing-log(cmd-args) :
+        within run-with-verbose-flag(cmd-args) :
+          compile(build-settings(), build-system())
 
   ;Command
   Command("compile",
           AtLeastOneArg, "the .stanza/.proj input files or Stanza package names.",
           common-stanza-flags(["o" "s" "pkg" "pkg-cache" "build-from-source" "optimize" "debug" "ccfiles" "ccflags" "flags"
-                               "verbose" "supported-vm-packages" "platform" "external-dependencies" "macros" "link" "timing-log"
+                               "verbose" "supported-vm-packages" "platform" "external-dependencies" "macros" "link" "timing-log" "profile-compiler"
                                "profile" "coverage"]),
           compile-msg, false, verify-args, intercept-no-match-exceptions(compile-action))
 

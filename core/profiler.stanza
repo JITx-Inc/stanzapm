@@ -75,12 +75,12 @@ lostanza defn build-stack-trace-record-table (trace-table:ptr<core/StackTraceTab
 
 #if-defined(BOOTSTRAP) :
 
-  defn collect-profiling () -> ProfileResult : ProfileResult([], [])
+  defn collect-profiling (msecs:Int) -> ProfileResult : ProfileResult([], [], 100)
   defn collect-coverage () -> Tuple<ProfileInfo> : []
   public defn clear-profiling () : false
   public defn clear-coverage () : false
   defn do-start-sample-profiling (num-usecs:Int) : false
-  defn do-stop-sample-profiling () : false
+  defn do-stop-sample-profiling () -> Int : 100
 
 #else :
 
@@ -269,10 +269,11 @@ public defn stop-profiling () -> ProfileResult:
   collect-profiling(do-stop-sample-profiling())
 
 ;Profiling wrapper to be called with within
-public defn profiling (f:() -> ?, msecs:Int) :
+public defn profiling<?T> (f:() -> ?T, msecs:Int, g:ProfileResult -> ? = { false }) -> T :
   start-profiling(msecs)
-  f()
-  stop-profiling()
+  val res = f()
+  g(stop-profiling())
+  res
 
 ;;; convert to flame-graph format using traditional stack-collapse function
 
