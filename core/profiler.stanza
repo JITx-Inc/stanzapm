@@ -297,6 +297,7 @@ defn with-output-file-stream<?T> (f: FileOutputStream -> ?T, file:FileOutputStre
   try : f(file)
   finally : close(file)
 
+; turn profile result into flame graph file format
 public defn stack-collapse (res:ProfileResult, filename:String, top?:True|False = false, depth:Int = 1, silence-prefixes:Tuple<String> = default-silence-prefixes) :
   val strings = IntTable<String>()
   val silence-ids = IntSet()

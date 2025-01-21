@@ -2181,8 +2181,9 @@ defn insert-profiling (epackage:EPackage, coverage?:True|False) :
   ;Inline all top-level expressions
   val new-exps = for exp in exps(epackage) map :
     match(exp) :
-      (exp:EDefn) : insert-texp(exp, n(exp) != n(iotable,CORE-PROFILE-STACK-TRACE-ID)) as ETExp
-      (exp:EDefClosure|EDefmethod) : insert-texp(exp, true) as ETExp
+      (exp:EDefn) : insert-texp(exp, not lostanza?(exp)) as ETExp
+      (exp:EDefClosure) : insert-texp(exp, true) as ETExp
+      (exp:EDefmethod) : insert-texp(exp, not lostanza?(exp)) as ETExp
       (exp) : exp
   sub-function-info(sub-exps(epackage, new-exps), to-tuple $ infos)
 
