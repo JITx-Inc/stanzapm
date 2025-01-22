@@ -9606,14 +9606,16 @@ public defn all?<?T> (pred?: T -> True|False, xs:Seqable<?T>) -> True|False :
    for xs-seq in xs do-seq :
       let loop () :
          if empty?(xs-seq) : true
-         else : pred?(next(xs-seq)) and loop()
+         else if pred?(next(xs-seq)) : loop()
+         else : false
 
 public defn all?<?T,?S> (pred?: (T,S) -> True|False, xs:Seqable<?T>, ys:Seqable<?S>) -> True|False :
    for xs-seq in xs do-seq :
       for ys-seq in ys do-seq :
          let loop () :
             if empty?(xs-seq) or empty?(ys-seq) : true
-            else : pred?(next(xs-seq), next(ys-seq)) and loop()
+            else if pred?(next(xs-seq), next(ys-seq)) : loop()
+            else : false
 
 public defn all?<?T,?S,?U> (pred?: (T,S,U) -> True|False, xs:Seqable<?T>, ys:Seqable<?S>, zs:Seqable<?U>) -> True|False :
    for xs-seq in xs do-seq :
@@ -9621,7 +9623,8 @@ public defn all?<?T,?S,?U> (pred?: (T,S,U) -> True|False, xs:Seqable<?T>, ys:Seq
          for zs-seq in zs do-seq :
             let loop () :
                if empty?(xs-seq) or empty?(ys-seq) or empty?(zs-seq) : true
-               else : pred?(next(xs-seq), next(ys-seq), next(zs-seq)) and loop()
+               else if pred?(next(xs-seq), next(ys-seq), next(zs-seq)) : loop()
+               else : false
 
 public defn none?<?T> (xs:Seqable<?T>, pred?: T -> True|False) -> True|False :
   none?(pred?,xs)
@@ -11221,12 +11224,16 @@ public defmulti name (t:TypeObject) -> String
 
 #if-not-defined(BOOTSTRAP) :
 
+  public var last-profiler-time:Long = 0L
+
   ;Called from app to record stack trace as return addresses in buffer
   ;Demarcate end of each coroutine stack with -2 and end trace with -1
   lostanza defn profile-stack-trace () -> ref<False> :
     val vms:ptr<VMState> = call-prim flush-vm()
     [vms.profile-flag] = 2L
     val buffer = vms.profile-buffer
+    add(buffer, call-c clib/current_time_ms())
+    add(buffer, -2L) ; time marker
     labels :
       begin :
         goto loop(current-coroutine)
