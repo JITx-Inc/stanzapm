@@ -280,11 +280,10 @@ public defn stop-profiling () -> ProfileResult:
   collect-profiling(do-stop-sample-profiling())
 
 ;Profiling wrapper to be called with within
-public defn profiling<?T> (f:() -> ?T, msecs:Int, g:ProfileResult -> ? = { false }) -> T :
+public defn profiling (f:() -> ?, msecs:Int) -> ProfileResult :
   start-profiling(msecs)
-  val res = f()
-  g(stop-profiling())
-  res
+  f()
+  stop-profiling()
 
 ;;; convert to flame-graph format using traditional stack-collapse function
 
