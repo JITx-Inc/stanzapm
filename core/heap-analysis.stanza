@@ -342,7 +342,7 @@ public defn heap-dominator-tree (filename:String) -> FlatIdObjects :
   close(s)
   id-objs
 
-heap-dominator-tree("sizes.xml")
+; heap-dominator-tree("sizes.xml")
 
 ; defn id-print-guts (id:Int, tag:Int, refs:Seqable<Int>) :
 ;   print("%_ = {%_ %_}" % [id, class-name(tag), to-tuple $ refs])
