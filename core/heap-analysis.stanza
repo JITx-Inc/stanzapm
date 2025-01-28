@@ -30,6 +30,10 @@ lostanza defn class-name (x:ref<Int>) -> ref<String> :
 
 #if-defined(BOOTSTRAP) :
 
+  public defn heap-dominator-tree (filename:String) : false
+
+#else :
+
   ;;; INTERFACE TO STANZA MEMORY SYSTEM
 
   lostanza defn addrs (dom:ptr<core/HeapDominator>) -> ptr<LSLongVector> :
@@ -363,8 +367,4 @@ lostanza defn class-name (x:ref<Int>) -> ref<String> :
   ;     if tot-size > 0 :
   ;       id-print-stat(id, tag-of(objs, id), tot-size, size-of(objs, id))
   ;       println("")
-
-#else :
-
-  public defn heap-dominator-tree (filename:String) : false
 
