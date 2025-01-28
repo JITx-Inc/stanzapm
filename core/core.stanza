@@ -250,10 +250,10 @@ protected lostanza deftype HeapStatistic :
     extern-table: ptr<ExternTable>
     extern-defn-table: ptr<ExternDefnTable>
 
-#else:
-
   lostanza defn initialize-dominator-tree () -> ref<False> :
     return false
+
+#else:
 
   protected lostanza deftype HeapDominator :
     var roots : ptr<LSLongVector>

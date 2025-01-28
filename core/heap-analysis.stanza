@@ -55,10 +55,10 @@ lostanza defn class-name (x:ref<Int>) -> ref<String> :
 
   ; run gc, collect heap stats while walking each object in  nursery and heap
   lostanza defn do-analyze-heap (stats:ref<Vector<HeapStat>>) -> ref<Long> :
-    val vms:ptr<VMState> = call-prim flush-vm()
+    val vms:ptr<core/VMState> = call-prim flush-vm()
     run-garbage-collector()
     val num-classes = vms.heap-statistics.length
-    clear(addr(vms.heap-statistics.entries), num-classes * sizeof(HeapStatistic))
+    clear(addr(vms.heap-statistics.entries), num-classes * sizeof(core/HeapStatistic))
     iterate-objects(vms.heap.start, vms.heap.old-objects-end, vms, addr(collect-heap-stats))
     val nursery = core/nursery-start(addr(vms.heap))
     iterate-objects(nursery, vms.heap.top, vms, addr(collect-heap-stats))
