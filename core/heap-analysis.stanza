@@ -3,10 +3,6 @@ defpackage core/heap-analysis :
   import collections
   import core/long-vector
 
-; TODO:
-; remove unique-id
-; flatten prevs/nexts ??? -- perhaps adaptive structure like a list
-
 defn scatter<?T> (src:Seqable<?T>, idx:Tuple<Int>) -> Tuple<T> :
   val dst = Array<T>(length(idx))
   for (x in src, i in 0 to false) do : dst[idx[i]] = x
@@ -41,17 +37,12 @@ lostanza defn offs (dom:ptr<core/HeapDominator>) -> ptr<LSLongVector> :
 
 lostanza defn collect-object-address-and-size (p:ptr<long>, tag:int, size:long, vms:ptr<core/VMState>) -> ref<False> :
   add(addrs(vms.dom), p as long)
-  ; call-c clib/printf("ADDR %lx\n", p)
   add(sizes(vms.dom), size as long)
   return false
-
-lostanza var unique-id:long = 1000L
 
 lostanza defn collect-object-contents (p:ptr<long>, tag:int, size:long, vms:ptr<core/VMState>) -> ref<False> :
   add(offs(vms.dom), heap(vms.dom).length)
   add(heap(vms.dom), tag as long)
-  add(heap(vms.dom), unique-id)
-  unique-id = unique-id + 1L
   val idx = heap(vms.dom).length
   add(heap(vms.dom), 0L) ; place holder
   core/iterate-references(p, addr(do-collect-object-contents), vms)
@@ -153,9 +144,6 @@ defn get-all (xs:FlatObjects, indices:Range) -> Seq<Int> :
 defn tag-of (xs:FlatObjects, id:Int) -> Int :
   xs[offset(xs, id)]
 
-defn unique-of (xs:FlatObjects, id:Int) -> Int :
-  xs[offset(xs, id) + 1]
-
 lostanza defn size-of (xs:ref<FlatObjects>, id:ref<Int>) -> ref<Int> :
   return new Int{ xs.value.sizes.items[id.value] as int }
 
@@ -164,8 +152,8 @@ defn sizes (objs:FlatObjects) -> Seq<Int> :
 
 defn refs (objs:FlatObjects, id:Int) -> Seqable<Int> :
   val off = offset(objs, id)
-  val len = objs[off + 2]
-  val refs-off = off + 3
+  val len = objs[off + 1]
+  val refs-off = off + 2 
   get-all(objs, refs-off to (refs-off + len))
 
 lostanza defn do-dominator-tree () -> ref<FlatObjects> :
@@ -177,7 +165,6 @@ lostanza defn do-dominator-tree () -> ref<FlatObjects> :
   clear(sizes(dom))
   clear(heap(dom))
   ;; get all roots
-  call-c clib/printf("REG ROOTS...\n")
   register-all-roots(vms)
   call-c clib/printf("FOUND %d ROOTS...\n", roots(dom).length)
   ;; get sizes and addresses of objects on heap
@@ -191,8 +178,6 @@ lostanza defn do-dominator-tree () -> ref<FlatObjects> :
   ;; build heap data translated to object ids using addresses and binary search
   add(offs(dom), 0L)  ; first root object
   add(heap(dom), -1L) ; dummy root object tag
-  add(heap(dom), unique-id)
-  unique-id = unique-id + 1L
   add(heap(dom), roots(dom).length as long)
   for (var i:int = 0, i < roots(dom).length, i = i + 1) :
     add(heap(dom), addr-to-id(addrs(dom), roots(dom).items[i]) + 1) ; point to roots
@@ -238,23 +223,23 @@ defn prevs (nexts:Tuple<List<Int>>) -> Tuple<List<Int>> :
       prevs[r] = cons(id, prevs[r])
   to-tuple $ prevs
 
-defn id-print-guts (idx:Int, id:Int, unique:Int, tag:Int, refs:Seqable<Int>) :
-  print("%_: %_ = {%_ %_ %_}" % [idx, id, class-name(tag), unique, to-tuple $ refs])
+defn id-print-guts (id:Int, tag:Int, refs:Seqable<Int>) :
+  print("%_ = {%_ %_}" % [id, class-name(tag), to-tuple $ refs])
 
 defn print-id-object-guts (objs:FlatObjects) -> False :
   for id in 0 to length(objs) do :
-    id-print-guts(id, id, unique-of(objs, id), tag-of(objs, id), refs(objs, id))
+    id-print-guts(id, tag-of(objs, id), refs(objs, id))
     println("")
 
-defn id-print-stat (idx:Int, id:Int, unique:Int, tag:Int, tot-size:Int, size:Int) :
-  print("%_: %_ = {%_ %_ %_ %_}" % [idx, id, class-name(tag), unique, size, tot-size])
+defn id-print-stat (id:Int, tag:Int, tot-size:Int, size:Int) :
+  print("%_ = {%_ %_ %_}" % [id, class-name(tag), size, tot-size])
 
 defn print-id-object-stats (objs:FlatObjects, tot-sizes:Tuple<Int>) -> False :
   val ids = reverse $ to-list $ qsort({ tot-sizes[_] }, 0 to length(objs))
   for (id in ids, i in 0 to false) do :
     val tot-size = tot-sizes[id]
     if tot-size > 0 :
-      id-print-stat(i, id, unique-of(objs, id), tag-of(objs, id), tot-size, size-of(objs, id))
+      id-print-stat(id, tag-of(objs, id), tot-size, size-of(objs, id))
       println("")
 
 defn objects-to-id-objects (objs:FlatObjects) -> FlatIdObjects :
@@ -356,14 +341,14 @@ public defn heap-dominator-tree (filename:String) -> FlatIdObjects :
   ; val nxts0 = nexts(id-objs0)
   ; val prvs0 = prevs(nxts0)
   ; for (id in order(id-objs0), i in 0 to false) do :
-  ;   id-print-guts(i, id, unique-of(objs, id), tag-of(objs, id), refs(objs, id))
+  ;   id-print-guts(i, id, tag-of(objs, id), refs(objs, id))
   ;   print("  NEXTS %_ PREVS %_" % [nxts0[i], prvs0[i]])
   ;   println("")
   val id-objs = depth-first(id-objs0)
   ; val nxts = nexts(id-objs)
   ; val prvs = prevs(nxts)
   ; for (id in order(id-objs), i in 0 to false) do :
-  ;   id-print-guts(i, id, unique-of(objs, id), tag-of(objs, id), refs(objs, id))
+  ;   id-print-guts(i, id, tag-of(objs, id), refs(objs, id))
   ;   print("  NEXTS %_ PREVS %_" % [nxts[i], prvs[i]])
   ;   println("")
   val nxts = nexts(id-objs)
@@ -417,24 +402,18 @@ heap-dominator-tree("sizes.xml")
 ;   ;0
 ;   add(offs(dom), 0L)
 ;   add(heap(dom), -1L)
-;   add(heap(dom), unique-id)
-;   unique-id = unique-id + 1L
 ;   add(heap(dom), 1L)
 ;   add(heap(dom), 2L)
 ;   add(sizes(dom), 2L * 8L)
 ;   ;1
 ;   add(offs(dom), heap(dom).length)
 ;   add(heap(dom), object-type-id(tst-1))
-;   add(heap(dom), unique-id)
-;   unique-id = unique-id + 1L
 ;   add(heap(dom), 1L)
 ;   add(heap(dom), 3L)
 ;   add(sizes(dom), 8L + 1L * 8L)
 ;   ;2
 ;   add(offs(dom), heap(dom).length)
 ;   add(heap(dom), object-type-id(tst-0))
-;   add(heap(dom), unique-id)
-;   unique-id = unique-id + 1L
 ;   add(heap(dom), 2L)
 ;   add(heap(dom), 1L)
 ;   add(heap(dom), 3L)
@@ -442,8 +421,6 @@ heap-dominator-tree("sizes.xml")
 ;   ;3
 ;   add(offs(dom), heap(dom).length)
 ;   add(heap(dom), object-type-id(tst-1))
-;   add(heap(dom), unique-id)
-;   unique-id = unique-id + 1L
 ;   add(heap(dom), 0L)
 ;   add(sizes(dom), 8L)
 ;   return FlatObjects(sizes(dom), offs(dom), heap(dom))
