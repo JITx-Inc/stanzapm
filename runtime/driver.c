@@ -705,7 +705,7 @@ int stop_sample_profiling() {
 
 #else
 
-int start_profile_sampling (void *handler, int usecs) {
+int start_sample_profiling (void *handler, int usecs) {
   return 0;
 }
 int stop_sample_profiling () {

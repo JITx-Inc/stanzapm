@@ -71,11 +71,12 @@ defn run-with-timing-log<?T> (body:() -> ?T, cmd-args:CommandArgs) -> T :
 ;If -profile-compiler flag is provided, then execute the body
 ;with support for profiling.
 defn run-with-profiler<?T> (body:() -> ?T, cmd-args:CommandArgs) -> T :
-  generate<T> :
-    if flag?(cmd-args, "profile-compiler") :
-      stack-collapse(profiling({ yield(body()) }, 100), cmd-args["profile-compiler"])
-    else :
-      body()
+  var res:T
+  if flag?(cmd-args, "profile-compiler") :
+    stack-collapse(profiling({ res = body() }, 100), cmd-args["profile-compiler"])
+  else :
+    res = body()
+  res
 
 ;============================================================
 ;====================== Verbosity ===========================

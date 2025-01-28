@@ -60,6 +60,7 @@ PKGFILES="math \
           core/debug-table \
           core/sighandler \
           core/local-table \
+          core/profiler \
           arg-parser \
           line-wrap \
           stz/test-driver \
