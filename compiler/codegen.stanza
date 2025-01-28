@@ -337,6 +337,7 @@ public defn compile-entry-function (emitter:CodeEmitter, stubs:AsmStubs) :
                                #label(debug-table)            ;debug-table:ptr<?>
                                #label(local-var-table)        ;local-var-table:ptr<?>
                                #label(heap-statistics)        ;heap-statistics:ptr<?>
+                               #long()                        ;heap-dominator-tree:ptr<?>
                                #label(class-table)            ;class-table:ptr<?>
                                #label(global-root-table)      ;global-root-table:ptr<GlobalRoots>
                                #label(stackmap-table)         ;stackmap-table:ptr<?>

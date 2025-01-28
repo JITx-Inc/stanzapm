@@ -32,6 +32,7 @@ public lostanza deftype VMState :
   var debug-table: ptr<?>          ;(Permanent State)
   var local-var-table: ptr<?>      ;(Permanent State)
   var heap-statistics: ptr<?>      ;(Permanent State)
+  var heap-dominator-tree: ptr<?>  ;(Variable State)
   var class-table: ptr<?>          ;(Permanent State)
   ;Interpreted Mode Tables
   var instructions: ptr<byte>      ;(Permanent State)
