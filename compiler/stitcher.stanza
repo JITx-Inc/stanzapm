@@ -936,11 +936,13 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
           E $ DefLabel(string-lbls[filename(info)])
           E $ DefInt(line(info))
           E $ DefInt(column(info))
+          E $ DefLong(-1L when (function(trace-entry) is False) else to-long(function(trace-entry) as Int))
         (f:False) :
           E $ DefLong(0L)
           E $ DefLong(0L)
           E $ DefInt(0)
           E $ DefInt(0)
+          E $ DefLong(-1L)
     E $ DefText()
     E $ Comment("End of File Information Table")  
 
@@ -952,6 +954,47 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
       E $ DefString(s)
     E $ DefText()
     E $ Comment("End of String Table for Filenames")  
+
+  defn emit-profile-flag (code-emitter:CodeEmitter) :
+    defn E (i:Ins) : emit(code-emitter, i)
+    E $ Comment("Profile Flag")  
+    E $ DefData()
+    E $ Label(profile-flag(stubs))
+    E $ DefLong(0L)
+
+  ;Emit function info table
+  defn emit-function-counters-table (code-emitter:CodeEmitter, num:Int) :
+    defn E (i:Ins) : emit(code-emitter, i)
+    E $ Comment("Function Counters for Profiling")  
+    E $ DefData()
+    E $ Label(function-counters(stubs))
+    for i in 0 to num do :
+      E $ DefLong(0L)
+
+  ;Emit function info table
+  defn emit-function-info-table (code-emitter:CodeEmitter, function-info-table:Tuple<FunctionInfo>, len:Int) :
+    defn E (i:Ins) : emit(code-emitter, i)
+    val string-lbls = HashTable-init<String,Int>(unique-id{stubs})
+    E $ Comment("Function Info Table for Profiling")  
+    E $ DefData()
+    E $ Label(function-info(stubs))
+    E $ DefLong(to-long(length(function-info-table)))
+    for fun-info in function-info-table do :
+      E $ DefLabel(string-lbls[to-string(package(info(fun-info)))])
+      match(signature(info(fun-info))) :
+        (s:String) : E $ DefLabel(string-lbls[s])
+        (f:False) : E $ DefLong(0L)
+      val file-info = info(info(fun-info)) as AbsoluteFileInfo
+      E $ DefLabel(string-lbls[filename(file-info)])
+      E $ DefInt(line(file-info))
+      E $ DefInt(column(file-info))
+    E $ DefText()
+    E $ DefData()
+    for entry in string-lbls do :
+      val [s, n] = [key(entry), value(entry)]
+      E $ Label(n)
+      E $ DefString(s)
+    E $ DefText()
 
   defn emit-export-table (code-emitter: CodeEmitter) -> False:
     defn E (i:Ins) : emit(code-emitter, i)
@@ -1008,6 +1051,16 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
       if generate-export-directives-table?(backend(stubs)) :
         emit-export-table(code-emitter)
       emit-heap-statistics-table(code-emitter)
+      val pkgs = to-tuple $ packages
+      val info =
+        if length(pkgs) == 1 :
+          match(function-info(pkgs[0])) :
+            (info:Tuple<FunctionInfo>) : info
+            (info:False) : []
+        else : []
+      emit-profile-flag(code-emitter)
+      emit-function-counters-table(code-emitter, length(info))
+      emit-function-info-table(code-emitter, info, length(info))
     defmethod stubs (this) :
       stubs
     defmethod core-fn (this, id:FnId) :

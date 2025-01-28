@@ -6,6 +6,7 @@ defpackage stz/main :
   import reader
   import arg-parser
   import line-wrap
+  import profiler
   import stz/compiler
   import stz/params
   import stz/config
@@ -62,6 +63,19 @@ defn run-with-timing-log<?T> (body:() -> ?T, cmd-args:CommandArgs) -> T :
     create-timing-log(body, cmd-args["timing-log"])
   else :
     body()
+
+;============================================================
+;=================== profile-compiler =======================
+;============================================================
+
+;If -profile-compiler flag is provided, then execute the body
+;with support for profiling.
+defn run-with-profiler<?T> (body:() -> ?T, cmd-args:CommandArgs) -> T :
+  generate<T> :
+    if flag?(cmd-args, "profile-compiler") :
+      stack-collapse(profiling({ yield(body()) }, 100), cmd-args["profile-compiler"])
+    else :
+      body()
 
 ;============================================================
 ;====================== Verbosity ===========================
@@ -229,6 +243,10 @@ val COMMON-STANZA-FLAGS = [
     "Requests the compiler to compile in optimized mode.")
   Flag("debug", ZeroFlag, OptionalFlag,
     "Requests the compiler to compile for debugging.")
+  Flag("profile", ZeroFlag, OptionalFlag,
+    "Requests the compiler to add profile counters.")
+  Flag("coverage", ZeroFlag, OptionalFlag,
+    "Requests the compiler to add coverage counters.")
   Flag("link", OneFlag, OptionalFlag,
     "Provide the type of linking to use.")
   Flag("ccfiles", ZeroOrMoreFlag, OptionalFlag,
@@ -247,6 +265,8 @@ val COMMON-STANZA-FLAGS = [
     "The name of the output external dependencies file.")
   Flag("timing-log", OneFlag, OptionalFlag,
     "If provided, the filename of the timing log to generate.")
+  Flag("profile-compiler", OneFlag, OptionalFlag,
+    "If provided, the filename of the flame-graph to generate.")
   Flag("macros", AtLeastOneFlag, OptionalFlag,
     "If provided, the filename of the macro plugin.")]
 
@@ -333,6 +353,8 @@ defn compile-command () :
         flag?(cmd-args, "build-from-source")
         flag?(cmd-args, "optimize")
         flag?(cmd-args, "debug")
+        flag?(cmd-args, "profile")
+        flag?(cmd-args, "coverage")
         get?(cmd-args, "ccfiles", [])
         ccflags(cmd-args)
         map(to-symbol, get?(cmd-args, "flags", []))
@@ -340,15 +362,17 @@ defn compile-command () :
         symbol?("link"))
 
     ;Launch!
-    within run-with-timing-log(cmd-args) :
-      within run-with-verbose-flag(cmd-args) :
-        compile(build-settings(), build-system())
+    within run-with-profiler(cmd-args) :
+      within run-with-timing-log(cmd-args) :
+        within run-with-verbose-flag(cmd-args) :
+          compile(build-settings(), build-system())
 
   ;Command
   Command("compile",
           AtLeastOneArg, "the .stanza/.proj input files or Stanza package names.",
           common-stanza-flags(["o" "s" "pkg" "pkg-cache" "build-from-source" "optimize" "debug" "ccfiles" "ccflags" "flags"
-                               "verbose" "supported-vm-packages" "platform" "external-dependencies" "macros" "link" "timing-log"]),
+                               "verbose" "supported-vm-packages" "platform" "external-dependencies" "macros" "link" "timing-log" "profile-compiler"
+                               "profile" "coverage"]),
           compile-msg, false, verify-args, intercept-no-match-exceptions(compile-action))
 
 
@@ -383,6 +407,8 @@ defn build-command () :
         flag?(cmd-args, "build-from-source")
         flag?(cmd-args, "optimize")
         flag?(cmd-args, "debug")
+        flag?(cmd-args, "profile")
+        flag?(cmd-args, "coverage")
         []
         ccflags(cmd-args)
         map(to-symbol, get?(cmd-args, "flags", []))
@@ -397,7 +423,8 @@ defn build-command () :
   ;Command definition
   Command("build",
           ZeroOrOneArg, "the name of the build target. If not supplied, the default build target is 'main'.",
-          common-stanza-flags(["s" "o" "external-dependencies" "pkg" "pkg-cache" "build-from-source" "flags" "optimize" "debug" "verbose" "ccflags" "macros" "link" "timing-log"]),
+          common-stanza-flags(["s" "o" "external-dependencies" "pkg" "pkg-cache" "build-from-source" "flags" "optimize" "debug"
+                               "verbose" "ccflags" "macros" "link" "timing-log" "profile" "coverage"]),
           build-msg, false, verify-args, intercept-no-match-exceptions(build))
 
 ;============================================================
@@ -448,6 +475,8 @@ defn extend-command () :
         false
         false
         flag?(cmd-args, "optimize")
+        false
+        false
         false
         get?(cmd-args, "ccfiles", [])
         ccflags(cmd-args)
@@ -518,6 +547,8 @@ defn compile-test-command () :
         flag?(cmd-args, "build-from-source")
         flag?(cmd-args, "optimize")
         flag?(cmd-args, "debug")
+        flag?(cmd-args, "profile")
+        flag?(cmd-args, "coverage")
         get?(cmd-args, "ccfiles", [])
         ccflags(cmd-args)
         new-flags
@@ -531,7 +562,7 @@ defn compile-test-command () :
   Command("compile-test",
           AtLeastOneArg, "the .stanza/.proj input files or Stanza package names containing tests.",
           common-stanza-flags(["platform" "s" "o" "external-dependencies" "pkg" "pkg-cache" "build-from-source" "ccfiles" "ccflags" "flags" "optimize" "debug" "verbose"
-                               "macros" "link" "timing-log"])
+                               "macros" "link" "timing-log" "profile" "coverage"])
           compile-test-msg, false, verify-args, intercept-no-match-exceptions(compile-test))
 
 ;============================================================
@@ -582,6 +613,8 @@ defn compile-macros-command () :
         get?(cmd-args, "pkg-cache", false)
         flag?(cmd-args, "build-from-source")
         flag?(cmd-args, "optimize")
+        false
+        false
         false
         get?(cmd-args, "ccfiles", [])
         ccflags(cmd-args)
@@ -988,6 +1021,8 @@ defn analyze-dependencies-command () :
         flag?(cmd-args, "build-from-source")
         flag?(cmd-args, "optimize")
         false
+        false
+        false
         []
         []
         map(to-symbol, get?(cmd-args, "flags", []))
@@ -1061,6 +1096,8 @@ defn auto-doc-command () :
         false
         false
         flag?(cmd-args, "optimize")
+        false
+        false
         false
         []
         []
