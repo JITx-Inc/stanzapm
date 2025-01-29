@@ -31,9 +31,6 @@ lostanza defn class-name (x:ref<Int>) -> ref<String> :
 #if-defined(BOOTSTRAP) :
 
   public defn heap-dominator-tree (filename:String) : false
-
-#if-defined(BOOTSTRAP) :
-
   public defn analyze-heap () -> Long : 0L
 
 #else :
