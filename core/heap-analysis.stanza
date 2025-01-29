@@ -1,4 +1,4 @@
-defpackage core/heap-analysis :
+defpackage heap-analyzer :
   import core
   import collections
   import core/long-vector

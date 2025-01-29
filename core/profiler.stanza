@@ -1,6 +1,6 @@
 ;See License.txt for details about licensing.
 #use-added-syntax(fastio-serializer)
-defpackage core/profiler :
+defpackage profiler :
   import core
   import collections
   import core/stack-trace
