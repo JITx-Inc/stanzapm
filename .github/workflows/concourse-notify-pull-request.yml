@@ -3,7 +3,7 @@ on: [ pull_request, workflow_dispatch ]
 env:
   HOST: https://ci.jitx.com
   TEAM: main
-  PIPELINE: lbstanza
+  PIPELINE: stanzapm
   INSTVARS: vars.branch="${{ github.base_ref }}"
   TOKEN: ${{ secrets.CONCOURSE_WEBHOOK_TOKEN }}
 jobs:
