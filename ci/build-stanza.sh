@@ -11,7 +11,7 @@ USAGE="STANZA_CONFIG=/path $0"
 echo "     STANZA_CONFIG:" "${STANZA_CONFIG:?Usage: ${USAGE}}"          # directory where .stanza config file will be stored, as in normal stanza behavior
 
 # Defaulted env var inputs - can override if necessary
-echo "              REPODIR:" "${REPODIR:=lbstanza}"
+echo "              REPODIR:" "${REPODIR:=stanzapm}"
 echo "      CONAN_USER_HOME:" "${CONAN_USER_HOME:=${REPODIR}}"
 echo "       CREATE_ARCHIVE:" "${CREATE_ARCHIVE:=false}"
 echo "       CREATE_PACKAGE:" "${CREATE_PACKAGE:=false}"
@@ -79,7 +79,7 @@ esac
 
 
 cd "${REPODIR}"
-echo "Building lbstanza version ${VER} in ${PWD}"
+echo "Building stanzapm version ${VER} in ${PWD}"
 
 mkdir -p build
 mkdir -p bin
