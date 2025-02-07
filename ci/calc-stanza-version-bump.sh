@@ -10,7 +10,7 @@ TOP="${PWD}"
 >&2 echo "            BRANCH:" "${BRANCH:?Usage: BRANCH=foo $0}"
 
 # Defaulted env var inputs - can override if necessary
->&2 echo "           REPODIR:" "${REPODIR:=lbstanza}"
+>&2 echo "           REPODIR:" "${REPODIR:=stanzapm}"
 ## By default, get the most recent previous tag on this branch from git
 ### note: if multiple tags exist on one commit, git doesn't always desecribe the most recent one
 ###    ### maybe use: git tag --sort=committerdate --contains HEAD~ | tail -1
