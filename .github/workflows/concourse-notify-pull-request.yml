@@ -3,14 +3,14 @@ on: [ pull_request, workflow_dispatch ]
 env:
   HOST: https://ci.jitx.com
   TEAM: main
-  PIPELINE: lbstanza
+  PIPELINE: stanzapm
   INSTVARS: vars.branch="${{ github.base_ref }}"
   TOKEN: ${{ secrets.CONCOURSE_WEBHOOK_TOKEN }}
 jobs:
   trigger-pr:
     runs-on: ubuntu-latest
     env:
-      RESOURCE: github--lbstanza--pr
+      RESOURCE: github--stanzapm--pr
     steps:
       - name: Trigger Concourse Pull Request
         run: |

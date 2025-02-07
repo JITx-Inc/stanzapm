@@ -3,14 +3,14 @@ on: [ push, workflow_dispatch ]
 env:
   HOST: https://ci.jitx.com
   TEAM: main
-  PIPELINE: lbstanza
+  PIPELINE: stanzapm
   INSTVARS: vars.branch="${{ github.ref_name }}"
   TOKEN: ${{ secrets.CONCOURSE_WEBHOOK_TOKEN }}
 jobs:
   trigger-push:
     runs-on: ubuntu-latest
     env:
-      RESOURCE: git--lbstanza
+      RESOURCE: git--stanzapm
     steps:
       - name: Trigger Concourse resource check
         run: |
