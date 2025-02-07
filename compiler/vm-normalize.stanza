@@ -785,6 +785,19 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
             emit(buffer, i)
       (i:SetIns) :
         emit(buffer, SetIns(x(i), #L(y(i))))
+      (i:ProfileIns) :
+        if kind(i) == 0 :
+          val good-lbl = make-label(buffer)
+          val profile-lbl = make-label(buffer)
+          load-instruction(Branch0Ins(profile-lbl, good-lbl, IsProfileOp()))
+          load-instruction(LabelIns(profile-lbl))
+          val profile-stack-trace = CodeId(n(iotable, CORE-PROFILE-STACK-TRACE-ID))
+          val call-ins = CallIns([], profile-stack-trace, [false-marker(), NumConst(0)], false)
+          load-instruction(call-ins)          
+          load-instruction(GotoIns(good-lbl))
+          load-instruction(LabelIns(good-lbl))
+        else :
+          load-instruction(IncFunctionCounterIns(id(i)))
       (i) :
         emit(buffer, i)
 
@@ -914,6 +927,13 @@ public defstruct HasHeapOp <: VMOp
 with: (printer => true)
 
 public defstruct HasStackOp <: VMOp
+with: (printer => true)
+
+public defstruct IsProfileOp <: VMOp
+with: (printer => true)
+
+public defstruct IncFunctionCounterIns <: VMIns :
+  id: Int
 with: (printer => true)
 
 public defstruct ArgEqOp <: VMOp :
