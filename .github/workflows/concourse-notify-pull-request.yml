@@ -10,7 +10,7 @@ jobs:
   trigger-pr:
     runs-on: ubuntu-latest
     env:
-      RESOURCE: github--lbstanza--pr
+      RESOURCE: github--stanzapm--pr
     steps:
       - name: Trigger Concourse Pull Request
         run: |

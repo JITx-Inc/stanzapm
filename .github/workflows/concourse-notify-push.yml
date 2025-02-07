@@ -10,7 +10,7 @@ jobs:
   trigger-push:
     runs-on: ubuntu-latest
     env:
-      RESOURCE: git--lbstanza
+      RESOURCE: git--stanzapm
     steps:
       - name: Trigger Concourse resource check
         run: |
