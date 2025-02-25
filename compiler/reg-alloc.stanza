@@ -131,7 +131,7 @@ Implementations:
 
     TMP = [heap-top]
     TMP2 = size
-    x = TMP + ref-tag-bits(1)
+    x = TMP
     [heap-top] = TMP + TMP2
 
   Op - InstanceofOp :
@@ -2547,7 +2547,7 @@ defn assemble (emitter:CodeEmitter,
   ;=========================
   ;==== Special Offsets ====
   ;=========================
-  val stack-offset-counter = Counter(-1 + 8)
+  val stack-offset-counter = Counter(8) ; -1
   val size-offset = next(stack-offset-counter, 8)
   val frames-offset = next(stack-offset-counter, 8)
   val sp-offset = next(stack-offset-counter, 8)
@@ -2671,10 +2671,10 @@ defn assemble (emitter:CodeEmitter,
             val F = I(f(e))
 
             ;Save current stack progress
-            val size-offset = -1 + 8
-            val frames-offset = -1 + 8 + 8
-            val sp-offset = -1 + 8 + 8 + 8
-            val pc-offset = -1 + 8 + 8 + 8 + 8
+            val size-offset = 8 ; -1
+            val frames-offset = 8 + 8 ; -1
+            val sp-offset = 8 + 8 + 8 ; -1
+            val pc-offset = 8 + 8 + 8 + 8 ; -1
             E $ LoadL(TMP, M(current-stack(stubs)))
             E $ SetL(TMP2, LM(lbl))
             E $ StoreL(TMP, TMP2, pc-offset)
@@ -2725,7 +2725,7 @@ defn assemble (emitter:CodeEmitter,
             val TMP2 = R1
             E $ LoadL(TMP, M(heap-top(stubs)))
             E $ SetL(TMP2, size)
-            E $ AddL(x, TMP, INT(1))
+            E $ SetL(x, TMP)
             E $ AddL(TMP, TMP, TMP2)
             E $ StoreL(M(heap-top(stubs)), TMP)
           (op:NoOp) :
@@ -2782,7 +2782,7 @@ defn assemble (emitter:CodeEmitter,
             E $ asm-UnaOp(T(x), V(x), to-asm-op(op), I(y))
           (op:FlushVMOp) :
             val x = V(head(xs(e)))
-            val stack-pointer-offset = -1 + 8 + 16
+            val stack-pointer-offset = 8 + 16 ; -1
             E $ LoadL(x, M(current-stack(stubs)))
             E $ StoreL(x, RSP, stack-pointer-offset)
             E $ SetL(x, M(vmstate(stubs)))
@@ -2937,7 +2937,8 @@ defn to-asm-imm (i:VMImm) -> asm-Imm :
     (i:ExternDefnId) : asm-LinkId(id(i))
     (i:GlobalId) : asm-LinkId(id(i))
     (i:DataId) : asm-LinkId(id(i))
-    (i:VoidMarker) : asm-IntImm(-8 + 2)
+    ; (i:VoidMarker) : asm-IntImm(-8 + 2)
+    (i:VoidMarker) : asm-IntImm(tag-marker(0x7fffffff))
     (i:ConstId) : fatal("Constants must be loaded")
 
 defn to-asm-op (op:VMOp) -> asm-Op :

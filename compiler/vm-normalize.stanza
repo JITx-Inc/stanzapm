@@ -193,12 +193,16 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
       if large-immediate?(x) :
         emit(buffer, SetIns(x*, x))
       else :
-        match(value(x as NumConst)) :
-          (v:Long|Double) :
-            val id = make-data(databuffer, binary-data(v))
-            emit(buffer, LoadIns(x*, DataId(id), false, 0))
-          (v:Float) :
-            norm-interpret-op(x*, NumConst(bits(v)))
+        match(x) :
+          (x:Marker|VoidMarker) :
+            emit(buffer, SetIns(x*, x))
+          (x:NumConst) :
+            match(value(x)) :
+              (v:Long|Double) :
+                val id = make-data(databuffer, binary-data(v))
+                emit(buffer, LoadIns(x*, DataId(id), false, 0))
+              (v:Float) :
+                norm-interpret-op(x*, NumConst(bits(v)))
       x*
 
   ;Ensure shorthands
@@ -378,27 +382,29 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
     val y = #V(y0)
     val type = id(iotable[typeid]) as TypeId
     switch(type) :
-      CORE-CHAR-ID : tag-with-bits(4)
-      CORE-BYTE-ID : tag-with-bits(3)
-      CORE-INT-ID : tag-with-bits(0)
-      CORE-FLOAT-ID : tag-float-with-bits(5)
+      CORE-CHAR-ID : set-tag-bit(CHAR-TAG-BIT)
+      CORE-BYTE-ID : set-tag-bit(BYTE-TAG-BIT)
+      CORE-INT-ID : set-tag-bit(INT-TAG-BIT)
+      CORE-FLOAT-ID : tag-float-with-bits(FLOAT-TAG-BIT)
+      CORE-DOUBLE-ID : tag-double()
       else : fatal("Type not supported: %_" % [type])
     where :
-      defn tag-with-bits (tagbits:Int) :
+      defn set-tag-bit (tag-bit:Long) :
         val tmp = make-local(buffer, VMLong())
-        norm-conv-op(tmp, y)
-        if tagbits == 0 :
-          emit(buffer, Op2Ins(x, ShlOp(), tmp, NumConst(32L)))
-        else :
-          emit(buffer, Op2Ins(tmp, ShlOp(), tmp, NumConst(32L)))
-          emit(buffer, Op2Ins(x, AddOp(), tmp, NumConst(tagbits)))
-      defn tag-float-with-bits (tagbits:Int) :
+        emit(buffer, SetIns(tmp, y))
+        do-set-tag-bit(tmp, tag-bit)
+      defn do-set-tag-bit (tmp:Local, tag-bit:Long) :
+        emit(buffer, Op2Ins(x, SetBitOp(), NumConst(tag-bit + BASE-TAG-BIT), tmp))
+      defn tag-float-with-bits (tag-bit:Long) :
         val tmp = make-local(buffer, VMLong())
         val tmp-int = make-local(buffer, VMInt())
         norm-interpret-op(tmp-int, y)
         norm-conv-op(tmp, tmp-int)
-        emit(buffer, Op2Ins(tmp, ShlOp(), tmp, NumConst(32L)))
-        emit(buffer, Op2Ins(x, AddOp(), tmp, NumConst(tagbits)))
+        do-set-tag-bit(tmp, tag-bit)
+      defn tag-double () :
+        val tmp = make-local(buffer, VMLong())
+        norm-interpret-op(tmp, y)
+        emit(buffer, Op1Ins(x, NotOp(), tmp))
 
   ;Detag a primitive
   defn norm-detag-op (x:Local, y0:VMImm, typeid:Int) :
@@ -409,27 +415,33 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
       CORE-BYTE-ID : detag-int()
       CORE-INT-ID : detag-int()
       CORE-FLOAT-ID : detag-float()
+      CORE-DOUBLE-ID : detag-double()
       else : fatal("Type not supported: %_" % [type])
     where :
       defn detag-int () :
-        val tmp = make-local(buffer, VMLong())
-        emit(buffer, Op2Ins(tmp, ShrOp(), y, NumConst(32L)))
-        norm-conv-op(x, tmp)
-
-      defn detag-float () :
-        val tmp = make-local(buffer, VMLong())
         val tmp-int = make-local(buffer, VMInt())
-        emit(buffer, Op2Ins(tmp, ShrOp(), y, NumConst(32L)))
-        norm-conv-op(tmp-int, tmp)
+        norm-conv-op(tmp-int, y)
+        norm-conv-op(x, tmp-int)
+  
+      defn detag-float () :
+        val tmp-int = make-local(buffer, VMInt())
+        norm-conv-op(tmp-int, y)
         norm-interpret-op(x, tmp-int)
+
+      defn detag-double () :
+        val tmp = make-local(buffer, VMLong())
+        norm-conv-op(tmp, y)
+        emit(buffer, Op1Ins(tmp, NotOp(), tmp))
+        norm-interpret-op(x, tmp)
 
   ;Deref a pointer
   defn norm-deref-op (x:Local, y:VMImm) :
-    emit(buffer, Op2Ins(x, AddOp(), #S(y), NumConst(7)))
+    emit(buffer, Op2Ins(x, AddOp(), #S(y), NumConst(0)))
 
   ;Test the (y/8)'th bit in the memory address specified by z.
   defn norm-test-bit-op (x:Local|False, op:VMOp, y:VMImm, z:VMImm) :
-    val y* = #V(y)
+    val y* = ensure(fn (x) : small-immediate?(x) or local-immediate?(x), y)
+    ; val y* = #V(y)
     val z* = #V(z)
     emit(buffer, Op2Ins(x, op, y*, z*))
 
@@ -494,17 +506,21 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
       val l = loc(r) as CallMemArg
       emit(buffer, LoadArgIns(x(r), index(l)))
 
+  defn L (x:Local, op:VMOp, y:VMImm, z:VMImm) :
+    load-instruction(Op2Ins(x, op, y, z))
+  defn L1 (x:Local, op:VMOp, y:VMImm) :
+    load-instruction(Op1Ins(x, op, y))
+  defn detag-int (x:VMImm) :
+    val x* = make-local(buffer, VMInt())
+    L1(x*, ConvOp(), x)
+    x*
+  defn tag-as-int (x:Local, y:VMImm) :
+    L(x, SetBitOp(), NumConst(BASE-TAG-BIT + INT-TAG-BIT), y)
+
   ;Lower HiStanza primitive operation
   defn lower (x:Local, op:VMOp, y:VMImm, z:VMImm) :
-    defn L (x:Local, op:VMOp, y:VMImm, z:VMImm) :
-      load-instruction(Op2Ins(x, op, y, z))
-    defn detag-int (x:VMImm) :
-      val x* = make-local(buffer, VMLong())
-      L(x*, ShrOp(), x, NumConst(32L))
-      x*
     defn tag-as-bool (x:Local, y:VMImm) :
-      L(x, ShlOp(), y, NumConst(3L))
-      L(x, AddOp(), x, NumConst(2L))
+      L(x, SetBitOp(), NumConst(BASE-TAG-BIT + MARKER-TAG-BIT), y)
     match(op) :
       (op:RefEqOp) :
         val tmp = make-local(buffer, VMLong())
@@ -515,60 +531,69 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
         L(tmp, NeOp(), y, z)
         tag-as-bool(x, tmp)
       (op:IntAddOp) :
-        L(x, AddOp(), y, z)
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, AddOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntSubOp) :
-        L(x, SubOp(), y, z)
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, SubOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntMulOp) :
-        L(x, MulOp(), detag-int(y), z)
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, MulOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntDivOp) :
-        val tmp = make-local(buffer, VMLong())
-        L(tmp, DivOp(), y, z)
-        L(x, ShlOp(), tmp, NumConst(32L))
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, DivOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntModOp) :
-        L(x, ModOp(), y, z)
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, ModOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntAndOp) :
-        L(x, AndOp(), y, z)
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, AndOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntOrOp) :
-        L(x, OrOp(), y, z)
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, OrOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntXorOp) :
-        L(x, XorOp(), y, z)
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, XorOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntShlOp) :
-        L(x, ShlOp(), y, detag-int(z))
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, ShlOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntShrOp) :
-        val tmp = make-local(buffer, VMLong())
-        L(tmp, ShrOp(), y, detag-int(z))
-        L(tmp, ShrOp(), tmp, NumConst(32L))
-        L(x, ShlOp(), tmp, NumConst(32L))
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, ShrOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntAshrOp) :
-        val tmp = make-local(buffer, VMLong())
-        L(tmp, AshrOp(), y, detag-int(z))
-        L(tmp, ShrOp(), tmp, NumConst(32L))
-        L(x, ShlOp(), tmp, NumConst(32L))
+        val tmp = make-local(buffer, VMInt())
+        L(tmp, AshrOp(), detag-int(y), detag-int(z))
+        tag-as-int(x, tmp)
       (op:IntLtOp) :
-        L(x, LtOp(), y, z)
+        L(x, LtOp(), detag-int(y), detag-int(z))
         tag-as-bool(x, x)
       (op:IntGtOp) :
-        L(x, GtOp(), y, z)
+        L(x, GtOp(), detag-int(y), detag-int(z))
         tag-as-bool(x, x)
       (op:IntLeOp) :
-        L(x, LeOp(), y, z)
+        L(x, LeOp(), detag-int(y), detag-int(z))
         tag-as-bool(x, x)
       (op:IntGeOp) :
-        L(x, GeOp(), y, z)
+        L(x, GeOp(), detag-int(y), detag-int(z))
         tag-as-bool(x, x)
   defn lower (x:Local, op:VMOp, y:VMImm) :
-    defn L (x:Local, op:VMOp, y:VMImm, z:VMImm) :
-      load-instruction(Op2Ins(x, op, y, z))
-    defn L (x:Local, op:VMOp, y:VMImm) :
-      load-instruction(Op1Ins(x, op, y))
     match(op) :
       (op:IntNotOp) :
-        val tmp = make-local(buffer, VMLong())
-        L(tmp, NotOp(), y)
-        L(tmp, ShrOp(), tmp, NumConst(32L))
-        L(x, ShlOp(), tmp, NumConst(32L))
+        val tmp-int = make-local(buffer, VMInt())
+        L1(tmp-int, NotOp(), detag-int(y))
+        tag-as-int(x, tmp-int)
       (op:IntNegOp) :
-        L(x, NegOp(), y)
+        L1(x, NegOp(), y)
 
   ;Load single instruction
   ;[normalize each instruction]
@@ -590,13 +615,13 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
         val args = normalize(call-records(buffer, ys(i), backend))
         within ret = normalize(ret-records(buffer, xs(i), backend)) :
           val code = make-local(buffer, VMLong())
-          emit(buffer, LoadIns(code, /f(i), false, 16 - 1))
+          emit(buffer, LoadIns(code, /f(i), false, 16))
           emit(buffer, CallRecordIns(ret, code, args, trace-entry(i), StanzaCall()))
       (i:TCallClosureIns) :
         val args = normalize(call-records(buffer, ys(i), backend))
         val ret = RetRecords([])
         val code = make-local(buffer, VMLong())
-        emit(buffer, LoadIns(code, /f(i), false, 16 - 1))
+        emit(buffer, LoadIns(code, /f(i), false, 16))
         emit(buffer, CallRecordIns(ret, code, args, false, StanzaTCall()))
       (i:ReturnIns) :
         val args = normalize(call-records(buffer, xs(i), backend))
@@ -626,7 +651,7 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
           emit(buffer, LabelIns(has-space-lbl))
           for (x in xs(i), type in types(i), size-on-heap in sizes-on-heap) do :
             emit(buffer, AllocOnHeap(x, NumConst(size-on-heap)))
-            emit(buffer, StoreIns(x, false, -1, Tag(type)))
+            emit(buffer, StoreIns(x, false, 0, Tag(type)))
         else :
           fatal("Multiple variable-sized allocations.") when length(sizes(i)) > 1
           val x = xs(i)[0]
@@ -645,10 +670,10 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
           emit(buffer, GotoIns(has-space-lbl))
           emit(buffer, LabelIns(has-space-lbl))
           emit(buffer, AllocOnHeap(x, size-on-heap))
-          emit(buffer, StoreIns(x, false, -1, Tag(type)))
+          emit(buffer, StoreIns(x, false, 0, Tag(type)))
       (i:StoreIns) :
         ;Compute new offset after factoring in ref tag
-        val offset* = (offset(i) + 8 - 1) when type(buffer,x(i)) is VMRef
+        val offset* = (offset(i) + 8) when type(buffer,x(i)) is VMRef
                  else offset(i)
         match(y(i)) :
           (y:False) :
@@ -668,8 +693,7 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
         ;  y is computed if we're assigning into an array.
         fatal("Barrier instructions assume location is heap-object.") when type(buffer,x(i)) is-not VMRef
 
-        ;Compute new offset after factoring in ref tag
-        val offset* = offset(i) + 8 - 1
+        val offset* = offset(i) + 8
 
         ;[TODO] Clean up
         ;Pseudocode:
@@ -727,7 +751,7 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
 
       (i:LoadIns) :
         ;Compute new offset after factoring in ref tag
-        val offset* = (offset(i) + 8 - 1) when type(buffer,y(i)) is VMRef
+        val offset* = (offset(i) + 8) when type(buffer,y(i)) is VMRef
                  else offset(i)
         match(z(i)) :
           (z:False) :
@@ -783,6 +807,8 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
             emit(buffer, Branch2Ins(n1(i), n2(i), NeOp(), #S(x(i)), NumConst(0)))
           (op) :
             emit(buffer, i)
+      (i:Branch2Ins) :
+        emit(buffer, Branch2Ins(n1(i), n2(i), op(i), #S(x(i)), #S(y(i))))
       (i:SetIns) :
         emit(buffer, SetIns(x(i), #L(y(i))))
       (i:ProfileIns) :
@@ -1098,6 +1124,8 @@ defn large-immediate? (x:VMImm) :
         (v:Float|Double) : false
         (v:Long) : small?(v)
         (v) : true
+    (x:Marker) : false
+    (x:VoidMarker) : false
     (x) : true
 
 ;x is a small immediate if it can fit as an x86 immediate operand.
@@ -1118,6 +1146,8 @@ defn small-immediate? (x:VMImm) :
     (x:GlobalId) : false
     (x:DataId) : false
     (x:ConstId) : false
+    (x:Marker) : false
+    (x:VoidMarker) : false
     (x) : true
 
 ;x is a function immediate if it can be used directly in an x86 call
@@ -1377,7 +1407,7 @@ defn ensure-normalized (f0:VMFunction, backend:Backend) :
         ensure-storage-immediate(crsp(i))
         ensure-small-immediate(y(i))
       (i:SetIns) :
-        ensure-large-immediate(y(i))
+        (y(i) is Marker|VoidMarker) or ensure-large-immediate(y(i))
       (i) :
         false
 

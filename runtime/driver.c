@@ -762,7 +762,8 @@ static Stack* alloc_stack (VMInit* init){
 //Given a pointer to a struct allocated on the heap,
 //add the tag bits to the pointer.
 uint64_t tag_as_ref (void* p){
-  return (uint64_t)p - 8 + 1;
+  return (uint64_t)p - 8;
+  // return (uint64_t)p - 8 + 1;
 }
 
 enum {

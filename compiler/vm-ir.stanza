@@ -20,13 +20,14 @@ public val BYTE-TYPE = 2
 public val CHAR-TYPE = 3
 public val INT-TYPE = 4
 public val FLOAT-TYPE = 5
-public val STACK-TYPE = 6
-public val FN-TYPE = 7
-public val TYPE-TYPE = 8
-public val LIVENESS-TRACKER-TYPE = 9
-public val NUM-BUILTIN-CONCRETE-TYPES = 10
-public val UNIQUE-TYPE = 10
-public val NUM-BUILTIN-TYPES = 11
+public val DOUBLE-TYPE = 6
+public val STACK-TYPE = 7
+public val FN-TYPE = 8
+public val TYPE-TYPE = 9
+public val LIVENESS-TRACKER-TYPE = 10
+public val NUM-BUILTIN-CONCRETE-TYPES = 11
+public val UNIQUE-TYPE = 11
+public val NUM-BUILTIN-TYPES = 12
 
 public val EXTEND-HEAP-FN = 0
 public val EXTEND-STACK-FN = 1
@@ -34,6 +35,25 @@ public val INIT-CONSTS-FN = 2
 public val EXECUTE-TOPLEVEL-COMMAND-FN = 3
 public val PROFILE-STACK-TRACE-FN = 4
 public val NUM-BUILTIN-FNS = 5
+
+public val BASE-TAG-BIT = 48L
+public val REF-TAG-BIT = 0L
+public val INT-TAG-BIT = 0L
+public val MARKER-TAG-BIT = 1L
+public val BYTE-TAG-BIT = 2L
+public val CHAR-TAG-BIT = 3L
+public val FLOAT-TAG-BIT = 4L
+public val DOUBLE-TAG-BIT = 5L
+public val REF-TAG-BITS = 0L
+public val INT-TAG-BITS = 1L << INT-TAG-BIT
+public val MARKER-TAG-BITS = 1L << MARKER-TAG-BIT
+public val BYTE-TAG-BITS = 1L << BYTE-TAG-BIT
+public val CHAR-TAG-BITS = 1L << CHAR-TAG-BIT
+public val FLOAT-TAG-BITS = 1L << FLOAT-TAG-BIT
+public val DOUBLE-TAG-BITS-MIN = 1L << DOUBLE-TAG-BIT
+
+public defn tag-marker (x:Int) -> Long :
+  to-long(x) | (1L << (BASE-TAG-BIT + MARKER-TAG-BIT))
 
 ;============================================================
 ;================== Design of Instructions ==================

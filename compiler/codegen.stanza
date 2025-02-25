@@ -26,6 +26,7 @@ Extend Heap Stub:
 defpackage stz/codegen :
   import core
   import collections
+  import stz/vm-ir
   import stz/asm-ir
   import stz/asm-ir-utils
   import stz/backend
@@ -302,7 +303,7 @@ public defn compile-entry-function (emitter:CodeEmitter, stubs:AsmStubs) :
 
   ;Emit labels for holding the VM state
   let :
-    defn #false () : E $ DefLong(2L)
+    defn #false () : E $ DefLong(tag-marker(0))
     defn #long () : E $ DefLong(0L)
     defn #int () : E $ DefInt(0)
     defn #L (f:AsmStubs -> Int) : E $ Label(f(stubs))
@@ -389,12 +390,12 @@ public defn compile-entry-function (emitter:CodeEmitter, stubs:AsmStubs) :
     E $ StoreL(M(labelid(field)(stubs)), TMP)
 
   ;Load the stack pointer
-  val frames-offset = 8 + 8 - 1
+  val frames-offset = 8 + 8
   E $ LoadL(TMP, A0, offset(VMINIT-PACKET,`current-stack))
   E $ LoadL(RSP, TMP, frames-offset)
 
   ;Set stack limit
-  val size-offset = 0 + 8 - 1
+  val size-offset = 0 + 8
   E $ LoadL(TMP, TMP, size-offset)
   E $ AddL(TMP, TMP, RSP)
   E $ StoreL(M(stack-limit(stubs)), TMP)

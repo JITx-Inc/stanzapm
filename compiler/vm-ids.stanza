@@ -79,6 +79,7 @@ public defn VMIds (dylibs:LoadedDynamicLibraries,
     CORE-CHAR-ID => CHAR-TYPE
     CORE-INT-ID => INT-TYPE
     CORE-FLOAT-ID => FLOAT-TYPE
+    CORE-DOUBLE-ID => DOUBLE-TYPE
     CORE-STACK-ID => STACK-TYPE
     CORE-FN-ID => FN-TYPE
     CORE-TYPE-ID => TYPE-TYPE

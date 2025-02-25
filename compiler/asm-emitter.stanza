@@ -172,7 +172,7 @@ defn check-restriction (ins:Ins, backend:Backend) :
          else : RE()
       (ins:VoidBinOp) :
          val [t, y, z, op] = [type(ins), y(ins), z(ins), op(ins)]
-         if #L(t) : (#SR!(y), #SR!(z))
+         if #L(t) : (#SRI!(y), #SR!(z))
          else : RE()
       (ins:BinOp) :
          val [t, x, y, z, op] = [type(ins), x(ins), y(ins), z(ins), op(ins)]
@@ -424,7 +424,9 @@ defn gen (os:OutputStream, ins:Ins, backend:Backend) :
          (y:Mem|ExMem) :
             #println(os, "   leaq (%_ + %_)(%%rip), %_" % [#lbl(y), offset(y), #imm(t,x)])
          (y) :
-            if #i(t) : #println(os, "   mov%_ %_, %_" % [size-suffix(t), #imm(t,y), #imm(t,x)])
+            if #i(t) :
+              if x != y :
+                #println(os, "   mov%_ %_, %_" % [size-suffix(t), #imm(t,y), #imm(t,x)])
             else if #f(t) : #println(os, "   movs%_ %_, %_" % [size-suffix(t), #imm(t,y), #imm(t,x)])
             else : fatal("Unreachable")
 
@@ -479,7 +481,7 @@ defn gen (os:OutputStream, ins:Ins, backend:Backend) :
       val ysz = size-suffix(ytype)
 
       ;Noop Conversions
-      if xtype == ytype :
+      if xtype == ytype or #i(xtype) == #i(ytype) :
          #set(xtype, x, y)
       ;Float to Integer Conversions
       else if #i(xtype) and #f(ytype) :
@@ -563,7 +565,11 @@ defn gen (os:OutputStream, ins:Ins, backend:Backend) :
       val comm = match(op) :
          (op:SetBitOp) : "bts"
          (op:ClearBitOp) : "btr"
-      #println(os, "   %_q %_, (%_)" % [comm, #imm(t,y), #imm(t,z)])
+      match(y, z) :
+         (y, z:Reg) :
+            #println(os, "   %_q %_, %_" % [comm, #imm(t,y), #imm(t,z)])
+         (y, z) :
+            #println(os, "   %_q %_, (%_)" % [comm, #imm(t,y), #imm(t,z)])
 
    defn #shf (t:ASMType, x:Loc, y:Imm, op:Op, z:Imm) :
       val sz = size-suffix(t)

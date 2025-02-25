@@ -10,6 +10,7 @@ defpackage clib
 
 protected extern stz_malloc: long -> ptr<?>
 protected extern stz_free: ptr<?> -> int
+; protected extern stz_realloc: (ptr<?>, long) -> ptr<?>
 protected extern malloc: long -> ptr<?>
 protected extern free: ptr<?> -> int
 protected extern realloc: (ptr<?>, long) -> ptr<?>
@@ -233,88 +234,55 @@ protected lostanza deftype HeapStatistic :
 ;are used only in compiled mode.
 ;Permanent state changes in-between each code load.
 ;Variable state changes in-between each boundary change.
-#if-defined(BOOTSTRAP) :
+protected lostanza deftype HeapDominator :
+  var roots : ptr<LSLongVector>
+  var sizes : ptr<LSLongVector>
+  var addrs : ptr<LSLongVector>
+  var offs  : ptr<LSLongVector>
+  var heap  : ptr<LSLongVector>
 
-  protected lostanza deftype VMState :
-    ;Compiled and Interpreted Mode
-    global-offsets: ptr<long>   ;(Permanent State)
-    global-mem: ptr<byte>       ;(Permanent State)
-    var sig-handler: long       ;(Permanent State)
-    var current-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
-    var stepping-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
-    const-table: ptr<long>      ;(Permanent State)
-    const-mem: ptr<byte>        ;(Permanent State)
-    data-offsets: ptr<int>      ;(Permanent State)
-    data-mem: ptr<byte>         ;(Permanent State)
-    code-offsets: ptr<int>      ;(Permanent State)
-    registers: ptr<long>        ;(Permanent State)
-    system-registers: ptr<long> ;(Permanent State)
-    var heap: Heap              ;(Variable State)
-    safepoint-table: ptr<?>     ;(Variable State)
-    debug-table: ptr<?>         ;(Variable State)
-    local-var-table: ptr<?>     ;(Variable State)
-    ;Compiled Mode Tables
-    class-table: ptr<ClassDescriptor>
-    global-root-table: ptr<GlobalRoots>
-    stackmap-table: ptr<ptr<StackMap>>
-    stack-trace-table: ptr<StackTraceTable>
-    extern-table: ptr<ExternTable>
-    extern-defn-table: ptr<ExternDefnTable>
+protected lostanza deftype VMState :
+  ;Compiled and Interpreted Mode
+  global-offsets: ptr<long>   ;(Permanent State)
+  global-mem: ptr<byte>       ;(Permanent State)
+  var sig-handler: long       ;(Permanent State)
+  var current-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
+  var stepping-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
+  const-table: ptr<long>      ;(Permanent State)
+  const-mem: ptr<byte>        ;(Permanent State)
+  data-offsets: ptr<int>      ;(Permanent State)
+  data-mem: ptr<byte>         ;(Permanent State)
+  code-offsets: ptr<int>      ;(Permanent State)
+  registers: ptr<long>        ;(Permanent State)
+  system-registers: ptr<long> ;(Permanent State)
+  var heap: Heap              ;(Variable State)
+  safepoint-table: ptr<?>     ;(Variable State)
+  debug-table: ptr<?>         ;(Variable State)
+  local-var-table: ptr<?>     ;(Variable State)
+  heap-statistics: ptr<HeapStatistics> ;(Variable State) 
+  var dom: ptr<HeapDominator> ;(Variable State)
+  profile-flag: ptr<long>
+  var profile-buffer: ptr<LSLongVector>
+  function-counters: ptr<long>
+  function-info: ptr<FunctionInfoTable>
+  ;Compiled Mode Tables
+  class-table: ptr<ClassDescriptor>
+  global-root-table: ptr<GlobalRoots>
+  stackmap-table: ptr<ptr<StackMap>>
+  stack-trace-table: ptr<StackTraceTable>
+  extern-table: ptr<ExternTable>
+  extern-defn-table: ptr<ExternDefnTable>
 
-  lostanza defn initialize-dominator-tree () -> ref<False> :
-    return false
-
-#else:
-
-  protected lostanza deftype HeapDominator :
-    var roots : ptr<LSLongVector>
-    var sizes : ptr<LSLongVector>
-    var addrs : ptr<LSLongVector>
-    var offs  : ptr<LSLongVector>
-    var heap  : ptr<LSLongVector>
-
-  protected lostanza deftype VMState :
-    ;Compiled and Interpreted Mode
-    global-offsets: ptr<long>   ;(Permanent State)
-    global-mem: ptr<byte>       ;(Permanent State)
-    var sig-handler: long       ;(Permanent State)
-    var current-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
-    var stepping-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
-    const-table: ptr<long>      ;(Permanent State)
-    const-mem: ptr<byte>        ;(Permanent State)
-    data-offsets: ptr<int>      ;(Permanent State)
-    data-mem: ptr<byte>         ;(Permanent State)
-    code-offsets: ptr<int>      ;(Permanent State)
-    registers: ptr<long>        ;(Permanent State)
-    system-registers: ptr<long> ;(Permanent State)
-    var heap: Heap              ;(Variable State)
-    safepoint-table: ptr<?>     ;(Variable State)
-    debug-table: ptr<?>         ;(Variable State)
-    local-var-table: ptr<?>     ;(Variable State)
-    heap-statistics: ptr<HeapStatistics> ;(Variable State) 
-    var dom: ptr<HeapDominator> ;(Variable State)
-    profile-flag: ptr<long>
-    var profile-buffer: ptr<LSLongVector>
-    function-counters: ptr<long>
-    function-info: ptr<FunctionInfoTable>
-    ;Compiled Mode Tables
-    class-table: ptr<ClassDescriptor>
-    global-root-table: ptr<GlobalRoots>
-    stackmap-table: ptr<ptr<StackMap>>
-    stack-trace-table: ptr<StackTraceTable>
-    extern-table: ptr<ExternTable>
-    extern-defn-table: ptr<ExternDefnTable>
-
-  lostanza defn initialize-dominator-tree () -> ref<False> :
-    val vms:ptr<core/VMState> = call-prim flush-vm()
-    val dom = (call-c clib/malloc(sizeof(HeapDominator))) as ptr<HeapDominator>
-    dom.roots = LSLongVector()
-    dom.sizes = LSLongVector()
-    dom.addrs = LSLongVector()
-    dom.offs  = LSLongVector()
-    dom.heap  = LSLongVector()
-    vms.dom   = dom
-    return false
+lostanza defn initialize-dominator-tree () -> ref<False> :
+  val vms:ptr<core/VMState> = call-prim flush-vm()
+  val dom = (call-c clib/malloc(sizeof(HeapDominator))) as ptr<HeapDominator>
+  dom.roots = LSLongVector()
+  dom.sizes = LSLongVector()
+  dom.addrs = LSLongVector()
+  dom.offs  = LSLongVector()
+  dom.heap  = LSLongVector()
+  vms.dom   = dom
+  return false
 
 lostanza deftype ExternTable :
   length: long
@@ -342,15 +310,19 @@ defn arity-message (arity:Int) :
   "Function cannot be called with %_ arguments." % [arity]
 
 protected defn no-method-error (multi:String, args:Tuple) :
+  print-string("NO-METHOD-ERROR\n")
   fatal("Multi %_ has no appropriate method for arguments of type (%,)." % [multi, seq(object-type,args)])
 
 protected defn amb-method-error (multi:String, args:Tuple) :
+  print-string("AMB-METHOD-ERROR\n")
   fatal("Multi %_ has multiple appropriate methods for arguments of type (%,)." % [multi, seq(object-type,args)])
 
 protected defn no-branch-error (args:Tuple) :
+  print-string("NO-BRANCH-ERROR\n")
   fatal("No appropriate branch for arguments of type (%,)." % [seq(object-type, args)])
 
 protected defn amb-branch-error (args:Tuple) :
+  print-string("AMB-BRANCH-ERROR\n")
   fatal("Multiple appropriate branches for arguments of type (%,)." % [seq(object-type, args)])
 
 protected lostanza defn tuple-length-error (actual-len:long, expected-len:long) -> ref<Void> :
@@ -359,6 +331,7 @@ defn tuple-length-message (actual-len:Int, expected-len:Int) :
   "Cannot destructure tuple of length %_ into %_ items." % [actual-len, expected-len]
 
 protected defn variable-uninitialized-error (name:String|False) -> Void :
+  print-string("VAR-UNIT-ERROR\n")
   match(name) :
     (name:String) : fatal("Variable %_ has not been initialized." % [name])
     (name:False) : fatal("Variable has not been initialized.")
@@ -666,6 +639,7 @@ protected lostanza defn stack-trace-record (frame:ptr<StackFrame>, trace-table:p
 
 protected lostanza defn realloc (p:ptr<?>, size*:long) -> ptr<?> :
   val p* = call-c clib/realloc(p, size*)
+  ; val p* = call-c clib/stz_realloc(p, size*)
   if p* == null : fatal!("Failed to realloc")
   return p*
 
@@ -679,12 +653,14 @@ lostanza defn LSLongVector (capacity:int) -> ptr<LSLongVector> :
   v.capacity = capacity
   v.length = 0
   v.items = call-c clib/stz_malloc(capacity * sizeof(long))
+  ; call-c clib/printf("LSLV %d %llx %d %d %llx\n", capacity, v, v.capacity, v.length, v.items)
   return v
 
 lostanza defn LSLongVector () -> ptr<LSLongVector> :
   return LSLongVector(8)
 
 lostanza defn ensure-capacity (v:ptr<LSLongVector>, new-capacity:int) -> int :
+  ; call-c clib/printf("ENSURE CAPACITY LSLV %d %llx\n", new-capacity, v)
   if v.capacity < new-capacity :
     var c:int = v.capacity
     while c < new-capacity : c = c << 1
@@ -792,11 +768,15 @@ lostanza var initialized-symbol-table? : long = 0L
 lostanza var consts-top : long = 4L
 lostanza var num-loaded-consts : long = 0L
 
+
 protected lostanza defn initialize-constants () -> ref<False> :
   ;Initialize read pointer to beginning of the constant table
   ;[num, constants ...]
   val vms:ptr<VMState> = call-prim flush-vm()
   val consts-data = vms.const-mem
+
+  val current-stack = vms.heap.current-stack as ref<Stack>
+  val system-stack = vms.heap.system-stack as ref<Stack>
 
   ;Read total number of constants
   const-ptr = consts-data
@@ -1038,6 +1018,7 @@ lostanza defn extend-stack-frames (frames:ptr<StackFrame>, size:long, new-size:l
     free-stack-frames(frames, size, heap)
     return new-frames
   else :
+    call-c clib/printf("EXTEND-STACK-FRAMES %llx %d\n", frames, new-size)
     return realloc(frames, new-size)
 
 lostanza defn allocate-stack () -> ref<Stack> :
@@ -1091,13 +1072,17 @@ Computing the new size of the stack:
 lostanza defn extend-stack (size:long, heap:ptr<Heap>) -> ref<False> :
   ;Retrieve stack
   val s:ptr<Stack> = untag(heap.system-stack)
+  call-c clib/printf("extend-stack: %llx SIZE %d FRAMES %llx\n", s, size, s.frames)
 
   ;Compute new size of stack
   val maximum-size = 1024L * 1024L * 1024L
   val desired-size = s.stack-pointer + size - s.frames
+  call-c clib/printf("extend-stack: SP %llx FRAMES %llx\n", s.stack-pointer, s.frames)
   var new-size:long = s.size
+  call-c clib/printf("extend-stack: DESIRED-SIZE %d NEW-SIZE %d\n", new-size desired-size)
   while new-size < desired-size : new-size = new-size << 1
   new-size = min(new-size, maximum-size)
+  call-c clib/printf("extend-stack: DESIRED-SIZE %d NEW-SIZE %d\n", new-size desired-size)
 
   ;Check for stack overflow
   if new-size < desired-size : fatal!("Stack overflow")
@@ -2658,16 +2643,28 @@ public lostanza defn bytes-freed-by-program () -> ref<Long> :
 ;============================================================
 
 lostanza defn tag (x:ptr<?>) -> long :
-  return (x + 1) as long
+  #if-defined(BOOTSTRAP) :
+    return (x + 1) as long
+  #else :
+    return x as long
 
 public lostanza defn tag-as-ref (x:ptr<?>) -> long :
-  return tag(x - 8)
+  #if-defined(BOOTSTRAP) :
+    return tag(x - 8)
+  #else :
+    return x as long
 
 lostanza defn untag (x:long) -> ptr<?> :
-  #if-not-defined(OPTIMIZE) :
-    val tagbits = x & 7L
-    if tagbits != 1 : fatal("Not a heap-allocated object!")
-  return (x - 1 + 8) as ptr<?>
+  #if-defined(BOOTSTRAP) :
+    #if-not-defined(OPTIMIZE) :
+      val tagbits = x & 7L
+      if tagbits != 1 : fatal("Not a heap-allocated object!")
+    return (x - 1 + 8) as ptr<?>
+  #else :
+    #if-not-defined(OPTIMIZE) :
+      val tagbits = x >> BASE-TAG-BIT
+      if tagbits != 0 : fatal("Not a heap-allocated object!")
+    return x as ptr<?>
 
 ;Return lower of two pointers.
 lostanza defn min (x:ptr<?>, y:ptr<?>) -> ptr<?> :
@@ -2782,7 +2779,14 @@ lostanza defn LivenessTracker (value:ref<Unique>, heap:ptr<Heap>) -> ref<Livenes
   heap.liveness-trackers = addr!([tracker])
   return tracker
 
-lostanza val false-marker:long = tagof(False) << 3L + 2
+
+#if-defined(BOOTSTRAP) :
+
+  lostanza val false-marker:long = tagof(False) << 3L + 2
+
+#else :
+
+  lostanza val false-marker:long = tagof(False) | (MARKER-TAG-BITS << BASE-TAG-BIT)
 
 ;Scan through heap.liveness-trackers and update them.
 ;After this function finishes:
@@ -2960,12 +2964,33 @@ val COROUTINE-CLOSED = 1
 val COROUTINE-SUSPENDED = 2
 val COROUTINE-OPEN = 3
 
-lostanza val INT-TAG-BITS:long = 0L
-lostanza val REF-TAG-BITS:long = 1L
-lostanza val MARKER-TAG-BITS:long = 2L
-lostanza val BYTE-TAG-BITS:long = 3L
-lostanza val CHAR-TAG-BITS:long = 4L
-lostanza val FLOAT-TAG-BITS:long = 5L
+#if-defined(BOOTSTRAP) :
+
+  lostanza val INT-TAG-BITS:long = 0L
+  lostanza val REF-TAG-BITS:long = 1L
+  lostanza val MARKER-TAG-BITS:long = 2L
+  lostanza val BYTE-TAG-BITS:long = 3L
+  lostanza val CHAR-TAG-BITS:long = 4L
+  lostanza val FLOAT-TAG-BITS:long = 5L
+
+#else :
+
+  lostanza val BASE-TAG-BIT:long = 48L
+  lostanza val REF-TAG-BIT:long = 0L
+  lostanza val INT-TAG-BIT:long = 0L
+  lostanza val MARKER-TAG-BIT:long = 1L
+  lostanza val BYTE-TAG-BIT:long = 2L
+  lostanza val CHAR-TAG-BIT:long = 3L
+  lostanza val FLOAT-TAG-BIT:long = 4L
+  lostanza val DOUBLE-TAG-BIT:long = 5L
+  lostanza val REF-TAG-BITS:long = 0L
+  lostanza val INT-TAG-BITS:long = 1L << INT-TAG-BIT
+  lostanza val MARKER-TAG-BITS:long = 1L << MARKER-TAG-BIT
+  lostanza val BYTE-TAG-BITS:long = 1L << BYTE-TAG-BIT
+  lostanza val CHAR-TAG-BITS:long = 1L << CHAR-TAG-BIT
+  lostanza val FLOAT-TAG-BITS:long = 1L << FLOAT-TAG-BIT
+  lostanza val DOUBLE-TAG-BITS-MIN:long = 1L << DOUBLE-TAG-BIT
+
 
 lostanza val FALSE-TYPE:int = 0
 lostanza val TRUE-TYPE:int = 1
@@ -2973,6 +2998,7 @@ lostanza val BYTE-TYPE:int = 2
 lostanza val CHAR-TYPE:int = 3
 lostanza val INT-TYPE:int = 4
 lostanza val FLOAT-TYPE:int = 5
+lostanza val DOUBLE-TYPE:int = 6
 
 public lostanza val null:ptr<?> = 0L as ptr<?>
 
@@ -3019,49 +3045,97 @@ public lostanza defn modulo (a:ref<Byte>, b:ref<Byte>) -> ref<Byte> :
 ;====================== Integers ============================
 ;============================================================
 
-public defn shift-left (a:Int, b:Int) -> Int :
-  ($prim shl a b)
+#if-defined(BOOTSTRAP) :
 
-public defn shift-right (a:Int, b:Int) -> Int :
-  ($prim shr a b)
+  public defn shift-left (a:Int, b:Int) -> Int :
+    ($prim shl a b)
 
-public defn arithmetic-shift-right (a:Int, b:Int) -> Int :
-  ($prim ashr a b)
+  public defn shift-right (a:Int, b:Int) -> Int :
+    ($prim shr a b)
 
-public defn bit-or (a:Int, b:Int) -> Int :
-  ($prim or a b)
+  public defn arithmetic-shift-right (a:Int, b:Int) -> Int :
+    ($prim ashr a b)
 
-public defn bit-and (a:Int, b:Int) -> Int :
-  ($prim and a b)
+  public defn bit-or (a:Int, b:Int) -> Int :
+    ($prim or a b)
 
-public defn bit-xor (a:Int, b:Int) -> Int :
-  ($prim xor a b)
+  public defn bit-and (a:Int, b:Int) -> Int :
+    ($prim and a b)
 
-public defn bit-not (a:Int) -> Int :
-  ($prim not a)
+  public defn bit-xor (a:Int, b:Int) -> Int :
+    ($prim xor a b)
 
-public defn negate (a:Int) -> Int :
-  ($prim neg a)
+  public defn bit-not (a:Int) -> Int :
+    ($prim not a)
 
-public defn abs (a:Int) -> Int :
-  (- a) when a < 0 else a
+  public defn negate (a:Int) -> Int :
+    ($prim neg a)
 
-public defn plus (a:Int, b:Int) -> Int :
-  ($prim add a b)
+  public defn abs (a:Int) -> Int :
+    (- a) when a < 0 else a
 
-public defn minus (a:Int, b:Int) -> Int :
-  ($prim sub a b)
+  public defn plus (a:Int, b:Int) -> Int :
+    ($prim add a b)
 
-public defn times (a:Int, b:Int) -> Int :
-  ($prim mul a b)
+  public defn minus (a:Int, b:Int) -> Int :
+    ($prim sub a b)
 
-public defn divide (a:Int, b:Int) -> Int :
-  ensure-divide-non-zero(b)
-  ($prim div a b)
+  public defn times (a:Int, b:Int) -> Int :
+    ($prim mul a b)
 
-public defn modulo (a:Int, b:Int) -> Int :
-  ensure-divide-non-zero(b)
-  ($prim mod a b)
+  public defn divide (a:Int, b:Int) -> Int :
+    ensure-divide-non-zero(b)
+    ($prim div a b)
+
+  public defn modulo (a:Int, b:Int) -> Int :
+    ensure-divide-non-zero(b)
+    ($prim mod a b)
+
+#else:
+
+  public lostanza defn shift-left (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    return new Int{a.value << b.value}
+
+  public lostanza defn shift-right (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    return new Int{a.value >> b.value}
+
+  public lostanza defn arithmetic-shift-right (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    return new Int{a.value >>> b.value}
+
+  public lostanza defn bit-or (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    return new Int{a.value | b.value}
+
+  public lostanza defn bit-and (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    return new Int{a.value & b.value}
+
+  public lostanza defn bit-xor (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    return new Int{a.value ^ b.value}
+
+  public lostanza defn bit-not (a:ref<Int>) -> ref<Int> :
+    return new Int{(~ a.value)}
+
+  public lostanza defn negate (a:ref<Int>) -> ref<Int> :
+    return new Int{(- a.value)}
+
+  public defn abs (a:Int) -> Int :
+    (- a) when a < 0 else a
+
+  public lostanza defn plus (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    return new Int{a.value + b.value}
+
+  public lostanza defn minus (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    return new Int{a.value - b.value}
+
+  public lostanza defn times (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    return new Int{a.value + b.value}
+
+  public lostanza defn divide (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    ensure-divide-non-zero(b)
+    return new Int{a.value / b.value}
+
+  public lostanza defn modulo (a:ref<Int>, b:ref<Int>) -> ref<Int> :
+    ensure-divide-non-zero(b)
+    return new Int{a.value % b.value}
 
 public lostanza defn popcount (x0:long) -> int :
   var x:long = x0
@@ -3320,17 +3394,37 @@ defmethod compare (a:Int, b:Int) -> Int :
   else if a > b : 1
   else : 0
 
-defmethod less? (a:Int, b:Int) -> True|False :
-  ($prim lt a b)
+#if-defined(BOOTSTRAP) :
 
-defmethod less-eq? (a:Int, b:Int) -> True|False :
-  ($prim le a b)
+  defmethod less? (a:Int, b:Int) -> True|False :
+    ($prim lt a b)
 
-defmethod greater? (a:Int, b:Int) -> True|False :
-  ($prim gt a b)
+  defmethod less-eq? (a:Int, b:Int) -> True|False :
+    ($prim le a b)
 
-defmethod greater-eq? (a:Int, b:Int) -> True|False :
-  ($prim ge a b)
+  defmethod greater? (a:Int, b:Int) -> True|False :
+    ($prim gt a b)
+
+  defmethod greater-eq? (a:Int, b:Int) -> True|False :
+    ($prim ge a b)
+
+#else :
+
+  lostanza defmethod less? (a:ref<Int>, b:ref<Int>) -> ref<True|False> :
+    if a.value < b.value : return true
+    else : return false
+
+  lostanza defmethod less-eq? (a:ref<Int>, b:ref<Int>) -> ref<True|False> :
+    if a.value <= b.value : return true
+    else : return false
+
+  lostanza defmethod greater? (a:ref<Int>, b:ref<Int>) -> ref<True|False> :
+    if a.value > b.value : return true
+    else : return false
+
+  lostanza defmethod greater-eq? (a:ref<Int>, b:ref<Int>) -> ref<True|False> :
+    if a.value >= b.value : return true
+    else : return false
 
 lostanza defmethod compare (a:ref<Long>, b:ref<Long>) -> ref<Int> :
   if a.value < b.value : return new Int{-1}
@@ -3853,6 +3947,8 @@ public defn dynamic-wind<?T> (in:False|(() -> ?),
                               out:False|(() -> ?)) -> T :
   dynamic-wind(body, DyCtxtFrame(in, out))
 
+var print? = false
+
 ;Run the given body with the equipped finally block.
 public defn with-finally<?T> (body: () -> ?T, finally: () -> ?) -> T :
   dynamic-wind(body, DyCtxtFinallyFrame(finally))
@@ -3927,10 +4023,18 @@ protected lostanza var current-coroutine:ref<RawCoroutine>
 lostanza var stepping-coroutine:ref<RawCoroutine|False> = false
 lostanza var COROUTINE-COUNTER:long
 
+lostanza defn print-progress (x:ref<Int>) -> ref<False> :
+  val vms:ptr<VMState> = call-prim flush-vm()
+  val current-stack = vms.heap.current-stack as ref<Stack>
+  call-c clib/printf("CURRENT-STACK: %llx SIZE %d FRAMES %llx\n", current-stack, current-stack.size, current-stack.frames)
+  call-c clib/printf("%d\n", x.value)
+  return false
+
 lostanza defn initialize-coroutines () -> ref<False> :
   val vms:ptr<VMState> = call-prim flush-vm()
   val current-stack = vms.heap.current-stack as ref<Stack>
   val crsp = call-prim crsp() as long
+  val state = DyCtxtState()
   current-coroutine = new RawCoroutine{
                         0L,
                         current-stack,
@@ -4235,19 +4339,31 @@ public lostanza defn set-max-heap-size (sz:ref<Long>) -> ref<False> :
 
 lostanza defn object-type-id (x:ref<?>) -> int :
   val ref = x as long
-  val tagbits = ref & 0x7L
+  #if-defined(BOOTSTRAP) :
+    val tagbits = ref & 0x7L
+  #else:
+    val tagbits = ref >> BASE-TAG-BIT
   if tagbits == INT-TAG-BITS : return INT-TYPE
   else if tagbits == BYTE-TAG-BITS : return BYTE-TYPE
   else if tagbits == CHAR-TAG-BITS : return CHAR-TYPE
   else if tagbits == FLOAT-TAG-BITS : return FLOAT-TYPE
   else if tagbits == MARKER-TAG-BITS :
-    return (ref >> 3L) as int
+    #if-defined(BOOTSTRAP) :
+      return (ref >> 3L) as int
+    #else:
+      return ref as int               ; lower 32 bits
   else if tagbits == REF-TAG-BITS :
-    val p = (ref - REF-TAG-BITS) as ptr<long>
+    #if-defined(BOOTSTRAP) :
+      val p = (ref - REF-TAG-BITS) as ptr<long>
+    #else:
+      val p = ref as ptr<long>
     return [p] as int
+  ; else :
+  ;   call-c clib/printf("Illegal tag bits %llx\n", tagbits)
+  ;   fatal("Illegal tag bits\n")
+  ;   return 0
   else :
-    fatal("Illegal tag bits\n")
-    return 0
+    return DOUBLE-TYPE
 
 public lostanza defn object-type (x:ref<?>) -> ref<String> :
   val chars = class-name(object-type-id(x))
@@ -4283,15 +4399,11 @@ protected val uninitialized = new Uninitialized
 ;=================== Initialize Profiler ====================
 ;============================================================
 
-#if-defined(BOOTSTRAP) :
-  lostanza defn initialize-profiler () -> ref<False> :
-    return false
-#else :
-  lostanza defn initialize-profiler () -> ref<False> :
-    val vms:ptr<VMState> = call-prim flush-vm()
-    [vms.profile-flag] = 0L
-    vms.profile-buffer = LSLongVector(1 << 20)
-    return false
+lostanza defn initialize-profiler () -> ref<False> :
+  val vms:ptr<VMState> = call-prim flush-vm()
+  [vms.profile-flag] = 0L
+  vms.profile-buffer = LSLongVector(1 << 20)
+  return false
 
 ;============================================================
 ;=================== Initialize Remaining ===================
@@ -4304,7 +4416,7 @@ initialize-gc-notifiers()
 initialize-gc-statistics()
 initialize-liveness-handlers()
 initialize-symbol-table()
-initialize-dominator-tree()
+; initialize-dominator-tree()
 initialize-profiler()
 
 ;================================================================================
@@ -4778,7 +4890,17 @@ defmethod print-all (o:OutputStream, xs:Seqable) :
 ;                 Convenience Functions
 ;                 =====================
 
+lostanza defn print-bits (x:ref<?>) -> ref<False> :
+  call-c clib/printf("BITS %llx\n", x)
+  return false
+
+lostanza defn print-string (x:ref<String>) -> ref<False> :
+  call-c clib/printf("STR %s\n", addr!(x.chars))
+  return false
+
 public defn println (o:OutputStream, x) :
+  print-string(object-type(x))
+  print-bits(x)
   print(o, x)
   print(o, NL)
 
@@ -6508,7 +6630,6 @@ defstruct ExceptionResult : (exception: Throwable)
 defstruct NormalResult : (result)
 
 
-
 ;============================================================
 ;============== Input/Output Exceptions =====================
 ;============================================================
@@ -8149,6 +8270,7 @@ lostanza defn bits-to-long (s:ref<String>, start:int, radix:int, bits:int) -> re
 ;======================= Limits =============================
 ;============================================================
 
+
 public val BYTE-MAX = 255Y
 public val BYTE-MIN = 0Y
 public lostanza val INT-MAX:ref<Int> = new Int{(1 << 31) - 1}
@@ -8156,19 +8278,21 @@ public lostanza val INT-MIN:ref<Int> = new Int{1 << 31}
 public lostanza val LONG-MAX:ref<Long> = new Long{(1L << 63L) - 1L}
 public lostanza val LONG-MIN:ref<Long> = new Long{1L << 63L}
 
+
 public val FLOAT-MAX = bits-as-float(0x7F7FFFFF)
 public val FLOAT-MIN-NORMAL = bits-as-float(0x00800000)
 public val FLOAT-MIN = bits-as-float(0x1)
 public val FLOAT-NAN = bits-as-float(0x7FC00000)
 public val FLOAT-POSITIVE-INFINITY = bits-as-float(0x7F800000)
-public val FLOAT-NEGATIVE-INFINITY = bits-as-float(0xFF800000)
+; public val FLOAT-NEGATIVE-INFINITY = bits-as-float(0xFF800000)
 
-public val DOUBLE-MAX = bits-as-double(0x7fefffffffffffffL)
-public val DOUBLE-MIN-NORMAL = bits-as-double(0x0010000000000000L)
-public val DOUBLE-MIN = bits-as-double(0x1L)
-public val DOUBLE-NAN = bits-as-double(0x7ff8000000000000L)
-public val DOUBLE-POSITIVE-INFINITY = bits-as-double(0x7ff0000000000000L)
-public val DOUBLE-NEGATIVE-INFINITY = bits-as-double(0xfff0000000000000L)
+; public val DOUBLE-MAX = bits-as-double(0x7fefffffffffffffL)
+; public val DOUBLE-MIN-NORMAL = bits-as-double(0x0010000000000000L)
+; public val DOUBLE-MIN = bits-as-double(0x1L)
+; public val DOUBLE-NAN = bits-as-double(0x7ff8000000000000L)
+; public val DOUBLE-POSITIVE-INFINITY = bits-as-double(0x7ff0000000000000L)
+; public val DOUBLE-NEGATIVE-INFINITY = bits-as-double(0xfff0000000000000L)
+
 
 ;============================================================
 ;==================== Arithmetic ============================
@@ -8297,6 +8421,7 @@ public defn product (xs: Seqable<Int>) -> Int : reduce(times, 1, xs)
 public defn product (xs: Seqable<Long>) -> Long : reduce(times, 1L, xs)
 public defn product (xs: Seqable<Float>) -> Float : reduce(times, 1.0f, xs)
 public defn product (xs: Seqable<Double>) -> Double : reduce(times, 1.0, xs)
+
 
 ;============================================================
 ;====================== Maybe ===============================
@@ -8656,6 +8781,7 @@ defmethod do (f: Int -> ?, r:SimpleRange) :
       f(i)
       loop(i + 1)
 
+
 ;============================================================
 ;==================== KeyValue Pairs ========================
 ;============================================================
@@ -8779,6 +8905,7 @@ defmethod print (o:OutputStream, i:FileInfo) :
    print(o, line(i))
    print(o, ".")
    print(o, column(i))
+
 
 ;============================================================
 ;================== Seqable and Sequences ===================
@@ -9980,6 +10107,7 @@ public defn fork-on-seq<?T,?S> (xs:Seqable<?T>, fs:Seqable<(Seq<T> -> ?S)>) -> T
    ;Return results
    to-tuple(seq(value!, results))
 
+
 ;============================================================
 ;=============== Commandline Arguments ======================
 ;============================================================
@@ -10029,6 +10157,7 @@ lostanza defn copy-chars (s:ref<String>) -> ptr<byte> :
 ;===================== Random Numbers =======================
 ;============================================================
 
+
 public lostanza deftype Random :
   var state: long
 lostanza defn next-state (s0:long) -> long :
@@ -10059,7 +10188,10 @@ public lostanza defn next-int (r:ref<Random>) -> ref<Int> :
 public lostanza defn next-signed-int (r:ref<Random>) -> ref<Int> :
   return new Int{next-bits(r, 32)}
 
+print? = true
 val LIMIT-STR = String("limit")
+print? = false
+
 public lostanza defn next-int (r:ref<Random>, n0:ref<Int>) -> ref<Int> :
   ensure-positive(LIMIT-STR, n0)
 
@@ -10146,6 +10278,7 @@ public lostanza defn next-double (rand:ref<Random>) -> ref<Double> :
   val den = (1L << 53L) as double
   return new Double{num as double / den}
 
+
 val RANDOM = Random(current-time-us())
 public defn current-random () : RANDOM
 public defn srand (n:Long) : set-state(RANDOM, n)
@@ -10155,6 +10288,7 @@ public defn rand-float () : next-float(RANDOM)
 public defn rand-double () : next-double(RANDOM)
 public defn rand (n:Int) : next-int(RANDOM, n)
 public defn rand (r:Range) : next-int(RANDOM, r)
+
 
 ;============================================================
 ;====================== Permutations ========================
@@ -10221,6 +10355,7 @@ public val CURRENT-PLATFORM:Platform =
         Linux
       #else :
         fatal("Unreachable")
+
 
 ;============================================================
 ;=================== Process Library ========================
@@ -10693,6 +10828,7 @@ public defn call-system (args:Tuple<String>) -> Int :
     fatal("Arguments must have minimum length 1. Program name is expected to be first argument.")
   call-system(args[0], args, false, false)
 
+
 ;============================================================
 ;=========== Call System and Retrieve Output ================
 ;============================================================
@@ -10754,6 +10890,7 @@ public lostanza defn replace-current-process (path:ref<String>,
     result = call-c clib/execv(addr!(path.chars), argvs)
   ;Issue error
   return throw(SystemCallException(linux-error-msg()))
+
 
 ;============================================================
 ;================== Shell Escaping ==========================
@@ -11257,40 +11394,39 @@ public defmulti name (t:TypeObject) -> String
 ;====================== Profiling ===========================
 ;============================================================
 
-#if-not-defined(BOOTSTRAP) :
+public var last-profiler-time:Long = 0L
 
-  public var last-profiler-time:Long = 0L
+;Called from app to record stack trace as return addresses in buffer
+;Demarcate end of each coroutine stack with -2 and end trace with -1
+lostanza defn profile-stack-trace () -> ref<False> :
+  val vms:ptr<VMState> = call-prim flush-vm()
+  [vms.profile-flag] = 2L
+  val buffer = vms.profile-buffer
+  add(buffer, call-c clib/current_time_ms())
+  add(buffer, -2L) ; time marker
+  labels :
+    begin :
+      goto loop(current-coroutine)
+    loop (co:ref<RawCoroutine>) :
+      val stack = co.stack
+      val end-sp = stack.stack-pointer
+      labels :
+        begin : goto loop-frame(stack.frames)
+        loop-frame (sp:ptr<StackFrame>) :
+          if sp.return > 0L :
+            add(buffer, sp.return)
+          if sp < end-sp : ;Continue if we're not at the end of the stack
+            val map-index = sp.liveness-map
+            val stackmap = vms.stackmap-table[map-index]
+            goto loop-frame(sp + stackmap.size)
+      add(buffer, -2L) ;End coroutine stack marker
+      match(co.parent) :
+        (p:ref<RawCoroutine>) : goto loop(p)
+        (p:ref<False>) : ()
+  add(buffer, -1L) ;End stack trace marker 
+  [vms.profile-flag] = 0L
+  return false
 
-  ;Called from app to record stack trace as return addresses in buffer
-  ;Demarcate end of each coroutine stack with -2 and end trace with -1
-  lostanza defn profile-stack-trace () -> ref<False> :
-    val vms:ptr<VMState> = call-prim flush-vm()
-    [vms.profile-flag] = 2L
-    val buffer = vms.profile-buffer
-    add(buffer, call-c clib/current_time_ms())
-    add(buffer, -2L) ; time marker
-    labels :
-      begin :
-        goto loop(current-coroutine)
-      loop (co:ref<RawCoroutine>) :
-        val stack = co.stack
-        val end-sp = stack.stack-pointer
-        labels :
-          begin : goto loop-frame(stack.frames)
-          loop-frame (sp:ptr<StackFrame>) :
-            if sp.return > 0L :
-              add(buffer, sp.return)
-            if sp < end-sp : ;Continue if we're not at the end of the stack
-              val map-index = sp.liveness-map
-              val stackmap = vms.stackmap-table[map-index]
-              goto loop-frame(sp + stackmap.size)
-        add(buffer, -2L) ;End coroutine stack marker
-        match(co.parent) :
-          (p:ref<RawCoroutine>) : goto loop(p)
-          (p:ref<False>) : ()
-    add(buffer, -1L) ;End stack trace marker 
-    [vms.profile-flag] = 0L
-    return false
 
 ;############################################################
 ;################## Math Package ############################
@@ -11398,3 +11534,5 @@ public lostanza defn to-radians (degrees:ref<Double>) -> ref<Double> :
 public lostanza defn to-degrees (radians:ref<Double>) -> ref<Double> :
    val pi = 3.141592653589793
    return new Double{radians.value * 180.0 / pi}
+
+

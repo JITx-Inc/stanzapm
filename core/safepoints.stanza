@@ -79,6 +79,7 @@ public lostanza defn safepoint-addresses (safepoints:ptr<SafepointTable>, filena
 ;Return the safepoints corresponding to the given file.
 ;[TODO] The path resolution should not be done in this part of the stack.
 public lostanza defn file-safepoints (safepoints:ptr<SafepointTable>, filename:ptr<byte>) -> ptr<FileSafepoints> :
+  call-c clib/printf("FILE-SAFEPOINTS\n")
   for (var i:long = 0, i < safepoints.num-files, i = i + 1) :
     if same-file?(String(filename), String(safepoints.files[i].filename)) == true :
       return safepoints.files[i]

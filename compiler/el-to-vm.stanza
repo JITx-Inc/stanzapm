@@ -859,20 +859,21 @@ defn Compiler (gt:GlobalTable,
             CImm([false-obj(iotable)])
       (x:ELiteral) :
         match(value(x)) :
-          (v:Char|Byte|Int|Float) :
+          (v:Char|Byte|Int|Float|Double) :
             val tmp = makedef(VMRef())
             val type = n{iotable, _} $ match(v) :
               (v:Char) : CORE-CHAR-ID
               (v:Byte) : CORE-BYTE-ID
               (v:Int) : CORE-INT-ID
               (v:Float) : CORE-FLOAT-ID
+              (v:Double) : CORE-DOUBLE-ID
             emit(Op1Ins(tmp, TagOp(type), NumConst(v)))
             CImm([tmp])
           (v:True) :
             CImm([true-obj(iotable)])
           (v:False) :
             CImm([false-obj(iotable)])
-          (v:List|String|Symbol|Long|Double) :
+          (v:List|String|Symbol|Long) :
             val cid = uniqueid()
             emit(VMConst(cid, v))
             CImm([ConstId(cid)])
@@ -911,6 +912,7 @@ defn Compiler (gt:GlobalTable,
               CORE-BYTE-ID : tagged-primitive-field(y(l))
               CORE-INT-ID : tagged-primitive-field(y(l))
               CORE-FLOAT-ID : tagged-primitive-field(y(l))
+              CORE-DOUBLE-ID : tagged-primitive-field(y(l))
               else : standard-field()
           (l) : standard-field()
         where :
@@ -1070,13 +1072,14 @@ defn Compiler (gt:GlobalTable,
           ;Initialize local to tagged primitive
           (y:ELiteral) :
             match(value(y)) :
-              (v:Char|Byte|Int|Float) :
+              (v:Char|Byte|Int|Float|Double) :
                 val x = local(x(ins))
                 val type = n{iotable, _} $ match(v) :
                   (v:Char) : CORE-CHAR-ID
                   (v:Byte) : CORE-BYTE-ID
                   (v:Int) : CORE-INT-ID
                   (v:Float) : CORE-FLOAT-ID
+                  (v:Double) : CORE-DOUBLE-ID
                 emit(Op1Ins(x, TagOp(type), NumConst(v)))
               (v) :
                 put(x(ins), cval(y))
@@ -1129,6 +1132,7 @@ defn Compiler (gt:GlobalTable,
           CORE-CHAR-ID : tagged-prim()
           CORE-INT-ID : tagged-prim()
           CORE-FLOAT-ID : tagged-prim()
+          CORE-DOUBLE-ID : tagged-prim()
           else :
             if empty?(ys(ins)) and not unique?(n(ins)) : marker-object()
             else : heap-object()

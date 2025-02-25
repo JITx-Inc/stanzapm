@@ -60,7 +60,7 @@ Removal strategies for each construct:
   TagImm:
     Becomes integer immediates.
     Requires each class to have an integer tag assigned to it.
-    If it is a marker, then becomes (tag << 3) + marker-ref-bits.
+    If it is a marker, then becomes (marker-ref-bits << 48L) | tag
     If it is not a marker, then becomes tag.
   StackMap:
     Becomes an integer immediate.
@@ -345,6 +345,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
                   CORE-CHAR-ID => CHAR-TYPE
                   CORE-INT-ID => INT-TYPE
                   CORE-FLOAT-ID => FLOAT-TYPE
+                  CORE-DOUBLE-ID => DOUBLE-TYPE
                   CORE-STACK-ID => STACK-TYPE
                   CORE-FN-ID => FN-TYPE
                   CORE-TYPE-ID => TYPE-TYPE
@@ -481,7 +482,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
     ;Return the numerical tag for the given global id
     defn tag-imm (gid:Int, marker?:True|False) :
       val props = global-props[gid] as ClassProps
-      if marker? : INT(tag(props) << 3 + 2)
+      if marker? : INT(tag-marker(tag(props)))
       else : INT(tag(props))
 
     ;Resolve a typeset from package ids to global ids
@@ -528,6 +529,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
               else if x == id-indices[CORE-CHAR-ID] : add(prim-targets, x => tgt)
               else if x == id-indices[CORE-INT-ID] : add(prim-targets, x => tgt)
               else if x == id-indices[CORE-FLOAT-ID] : add(prim-targets, x => tgt)
+              else if x == id-indices[CORE-DOUBLE-ID] : add(prim-targets, x => tgt)
               else if marker?(x) : add(marker-targets, x => tgt)
               else : add(ref-targets, x => tgt)              
 
@@ -551,10 +553,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
           val marker-targets? = not empty?(marker-targets)
           val ref-targets? = not empty?(ref-targets)
 
-          ;Checking for primitives or references requires knowing the tag bits.
-          ;So create the tag bits if we have either case.
-          if prim-targets? or ref-targets? :
-            E $ AndL(BITS, object, INT(7))
+          E $ ShrL(BITS, object, INT(BASE-TAG-BIT))
 
           ;Jump to the appropriate primitive target if the object
           ;is one of the given primitives.
@@ -562,17 +561,19 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
             val x = key(entry)
             val target = value(entry)
             val tagbits =
-              if x == id-indices[CORE-BYTE-ID] : INT(3)
-              else if x == id-indices[CORE-CHAR-ID] : INT(4)
-              else if x == id-indices[CORE-INT-ID] : INT(0)
-              else if x == id-indices[CORE-FLOAT-ID] : INT(5)
+              if x == id-indices[CORE-BYTE-ID] : INT(BYTE-TAG-BITS)
+              else if x == id-indices[CORE-CHAR-ID] : INT(CHAR-TAG-BITS)
+              else if x == id-indices[CORE-INT-ID] : INT(INT-TAG-BITS)
+              else if x == id-indices[CORE-FLOAT-ID] : INT(FLOAT-TAG-BITS)
+              else if x == id-indices[CORE-DOUBLE-ID] : INT(DOUBLE-TAG-BITS-MIN)
               else : fatal("Not a primitive type")
-            E $ BreakL(target, EqOp(), BITS, tagbits)
+            val op = GtOp() when (x == id-indices[CORE-DOUBLE-ID]) else EqOp()
+            E $ BreakL(target, op, BITS, tagbits)
 
           ;Skip the reference branches if the object is not a reference.
           val label-after-refs = M(marker-branches) when marker-targets?
                             else default-target
-          if ref-targets? : E $ BreakL(label-after-refs, NeOp(), BITS, INT(1))
+          if ref-targets? : E $ BreakL(label-after-refs, NeOp(), BITS, INT(REF-TAG-BITS))
           else if not marker-targets? : E $ Goto(label-after-refs)
 
           ;Jump to the appropriate reference branches if the object
@@ -583,7 +584,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
                 val header = tag-imm(key(e), false)
                 (value(header) as Int) => value(e)
             E $ Label(ref-branches)
-            E $ LoadL(TAG, object, -1)
+            E $ LoadL(TAG, object)
             let loop (tree:BinaryNode<Imm> = ref-tree()) :
               match(tree) :
                 (tree:InnerNode<Imm>) :
@@ -604,9 +605,12 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
           if marker-targets? :
             defn marker-tree () :
               BinaryNode $ for e in marker-targets seq :
-                val header = tag-imm(key(e), true)
+                val header = tag-imm(key(e), false)
                 (value(header) as Int) => value(e)
+            E $ BreakL(default-target, NeOp(), BITS, INT(MARKER-TAG-BITS))
             E $ Label(marker-branches)
+            E $ ShlL(object, object, IntImm(32)) ; CLEAR TAGS
+            E $ ShrL(object, object, IntImm(32))
             let loop (tree:BinaryNode<Imm> = marker-tree()) :
               match(tree) :
                 (tree:InnerNode<Imm>) :
@@ -648,6 +652,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
             else if x == id-indices[CORE-CHAR-ID] : add(prims, x)
             else if x == id-indices[CORE-INT-ID] : add(prims, x)
             else if x == id-indices[CORE-FLOAT-ID] : add(prims, x)
+            else if x == id-indices[CORE-DOUBLE-ID] : add(prims, x)
             else if marker?(x) : add(markers, x)
             else : add(refs, x)              
 
@@ -674,37 +679,41 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
           val marker-targets? = not empty?(markers)
           val ref-targets? = not empty?(refs)
 
-          if prim-targets? or ref-targets? :
-            E $ AndL(BITS, OBJ, INT(7))
+          E $ ShrL(BITS, OBJ, INT(BASE-TAG-BIT))
             
           for x in prims do :
             val tagbits =
-              if x == id-indices[CORE-BYTE-ID] : INT(3)
-              else if x == id-indices[CORE-CHAR-ID] : INT(4)
-              else if x == id-indices[CORE-INT-ID] : INT(0)
-              else if x == id-indices[CORE-FLOAT-ID] : INT(5)
+              if x == id-indices[CORE-BYTE-ID] : INT(BYTE-TAG-BITS)
+              else if x == id-indices[CORE-CHAR-ID] : INT(CHAR-TAG-BITS)
+              else if x == id-indices[CORE-INT-ID] : INT(INT-TAG-BITS)
+              else if x == id-indices[CORE-FLOAT-ID] : INT(FLOAT-TAG-BITS)
+              else if x == id-indices[CORE-DOUBLE-ID] : INT(DOUBLE-TAG-BITS-MIN)
               else : fatal("Not a primitive type")
-            E $ BreakL(M(pass-lbl), EqOp(), BITS, tagbits)
+            val op = GtOp() when (x == id-indices[CORE-DOUBLE-ID]) else EqOp()
+            E $ BreakL(M(pass-lbl), op, BITS, tagbits)
 
           ;Skip the reference branches if the object is not a reference.
           val label-after-refs = M(marker-branches) when marker-targets?
                             else M(end-lbl)
-          if ref-targets? : E $ BreakL(label-after-refs, NeOp(), BITS, INT(1))
+          if ref-targets? : E $ BreakL(label-after-refs, NeOp(), BITS, INT(REF-TAG-BITS))
           else if not marker-targets? : E $ Goto(label-after-refs)
 
           ;Ref branches
           if ref-targets?:
             E $ Label(ref-branches)
-            E $ LoadL(TAG, OBJ, -1)
+            E $ LoadL(TAG, OBJ)
             for x in refs do :
               E $ BreakL(M(pass-lbl), EqOp(), TAG, tag-imm(x, false))
             E $ Goto(M(end-lbl))
 
           ;Marker branches
           if marker-targets?: 
+            E $ BreakL(M(end-lbl), NeOp(), BITS, INT(MARKER-TAG-BITS))
             E $ Label(marker-branches)
+            E $ ShlL(OBJ, OBJ, IntImm(32)) ; CLEAR TAGS
+            E $ ShrL(OBJ, OBJ, IntImm(32))
             for x in markers do :
-              E $ BreakL(M(pass-lbl), EqOp(), OBJ, tag-imm(x,true))
+              E $ BreakL(M(pass-lbl), EqOp(), OBJ, tag-imm(x,false))
             E $ Goto(M(end-lbl))
 
           ;Pass and failure labels
@@ -814,7 +823,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
     E $ DefData()
     E $ Label(const-table(stubs))
     for v in consts do :
-      E $ DefLong(to-long(-1 << 3 + 2))
+      E $ DefLong(to-long(tag-marker(0x7fffffff)))
     E $ DefText()
     E $ Comment("End of Constant Table")
 
@@ -1326,7 +1335,7 @@ defn compile-extend-stack-stub (stitcher:Stitcher, emitter:CodeEmitter) :
     E $ StoreL(m2, r1)
 
   ;Compute stack offsets
-  val stack-offset-counter = Counter(-1 + 8)
+  val stack-offset-counter = Counter(8) ; -1
   val size-offset = next(stack-offset-counter, 8)
   val frames-offset = next(stack-offset-counter, 8)
   val sp-offset = next(stack-offset-counter, 8)
@@ -1542,7 +1551,7 @@ defn compile-collect-garbage-stub (stitcher:Stitcher, emitter:CodeEmitter) :
     E $ StoreL(m2, r1)
 
   ;Compute stack offsets
-  val stack-offset-counter = Counter(-1 + 8)
+  val stack-offset-counter = Counter(8) ; -1
   val size-offset = next(stack-offset-counter, 8)
   val frames-offset = next(stack-offset-counter, 8)
   val sp-offset = next(stack-offset-counter, 8)

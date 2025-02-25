@@ -69,7 +69,7 @@ public defn GlobalTable (stubs:AsmStubs) -> GlobalTable :
     var info:GlobalInfo
 
     ;Cache the void-marker.
-    val void-marker = DefLong(to-long(-1 << 3 + 2))
+    val void-marker = DefLong(tag-marker(0x7fffffff))
 
     ;Accumulate all roots here.
     val all-roots = Vector<Int>()
