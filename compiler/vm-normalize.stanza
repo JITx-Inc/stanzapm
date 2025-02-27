@@ -55,8 +55,9 @@ public defn normalize (prog:VMPackage, backend:Backend) -> NormVMPackage :
     val funcs* = for f in funcs(prog) map :
       val func* = normalize(func(f), databuffer, backend, iotable, extern-table[id(f)])
       sub-func(f, func*)
+    dump(prog, "logs")
     val norm-package = NormVMPackage(sub-funcs(prog, funcs*), datas(databuffer))
-    ;dump(norm-package, "logs")
+    dump(norm-package, "logs")
     norm-package
 
 ;============================================================
@@ -382,16 +383,18 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
     val y = #V(y0)
     val type = id(iotable[typeid]) as TypeId
     switch(type) :
-      CORE-CHAR-ID : set-tag-bit(CHAR-TAG-BIT)
-      CORE-BYTE-ID : set-tag-bit(BYTE-TAG-BIT)
-      CORE-INT-ID : set-tag-bit(INT-TAG-BIT)
+      CORE-CHAR-ID : set-tag-bit(CHAR-TAG-BIT, 8)
+      CORE-BYTE-ID : set-tag-bit(BYTE-TAG-BIT, 8)
+      CORE-INT-ID : set-tag-bit(INT-TAG-BIT, 32)
       CORE-FLOAT-ID : tag-float-with-bits(FLOAT-TAG-BIT)
       CORE-DOUBLE-ID : tag-double()
       else : fatal("Type not supported: %_" % [type])
     where :
-      defn set-tag-bit (tag-bit:Long) :
+      defn set-tag-bit (tag-bit:Long, width:Int) :
         val tmp = make-local(buffer, VMLong())
         emit(buffer, SetIns(tmp, y))
+        if width == 8 : 
+          emit(buffer, Op2Ins(tmp, AndOp(), tmp, NumConst(255))) ;TODO: would be nice if SetIns would do this
         do-set-tag-bit(tmp, tag-bit)
       defn do-set-tag-bit (tmp:Local, tag-bit:Long) :
         emit(buffer, Op2Ins(x, SetBitOp(), NumConst(tag-bit + BASE-TAG-BIT), tmp))
@@ -436,7 +439,7 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
 
   ;Deref a pointer
   defn norm-deref-op (x:Local, y:VMImm) :
-    emit(buffer, Op2Ins(x, AddOp(), #S(y), NumConst(0)))
+    emit(buffer, Op2Ins(x, AddOp(), #S(y), NumConst(8)))
 
   ;Test the (y/8)'th bit in the memory address specified by z.
   defn norm-test-bit-op (x:Local|False, op:VMOp, y:VMImm, z:VMImm) :

@@ -775,9 +775,6 @@ protected lostanza defn initialize-constants () -> ref<False> :
   val vms:ptr<VMState> = call-prim flush-vm()
   val consts-data = vms.const-mem
 
-  val current-stack = vms.heap.current-stack as ref<Stack>
-  val system-stack = vms.heap.system-stack as ref<Stack>
-
   ;Read total number of constants
   const-ptr = consts-data
   val n-consts = read-const-int()
@@ -1018,7 +1015,6 @@ lostanza defn extend-stack-frames (frames:ptr<StackFrame>, size:long, new-size:l
     free-stack-frames(frames, size, heap)
     return new-frames
   else :
-    call-c clib/printf("EXTEND-STACK-FRAMES %llx %d\n", frames, new-size)
     return realloc(frames, new-size)
 
 lostanza defn allocate-stack () -> ref<Stack> :
@@ -1072,17 +1068,13 @@ Computing the new size of the stack:
 lostanza defn extend-stack (size:long, heap:ptr<Heap>) -> ref<False> :
   ;Retrieve stack
   val s:ptr<Stack> = untag(heap.system-stack)
-  call-c clib/printf("extend-stack: %llx SIZE %d FRAMES %llx\n", s, size, s.frames)
 
   ;Compute new size of stack
   val maximum-size = 1024L * 1024L * 1024L
   val desired-size = s.stack-pointer + size - s.frames
-  call-c clib/printf("extend-stack: SP %llx FRAMES %llx\n", s.stack-pointer, s.frames)
   var new-size:long = s.size
-  call-c clib/printf("extend-stack: DESIRED-SIZE %d NEW-SIZE %d\n", new-size desired-size)
   while new-size < desired-size : new-size = new-size << 1
   new-size = min(new-size, maximum-size)
-  call-c clib/printf("extend-stack: DESIRED-SIZE %d NEW-SIZE %d\n", new-size desired-size)
 
   ;Check for stack overflow
   if new-size < desired-size : fatal!("Stack overflow")
@@ -1611,10 +1603,10 @@ lostanza defn mark-and-push (ref:ptr<long>, vms:ptr<VMState>) -> ref<False> :
   ;Retrieve the value at the given heap pointer.
   val v = [ref]
   ;Is this a reference to a Stanza heap object?
-  val tagbits = v & 7L
-  if tagbits == 1L :
+  val tagbits = v >> BASE-TAG-BIT
+  if tagbits == 0L :
     ;Remove the tagbits to retrieve the object pointer.
-    val p = (v - 1) as ptr<long>
+    val p = v as ptr<long>
     ;Mark the object, and test whether it has already previously been marked.
     if test-and-set-mark(p, heap) == 0 :
       ;If there is still space in the marking stack add the object to the
@@ -1630,10 +1622,10 @@ public lostanza defn mark-from-root (ref:ptr<long>, vms:ptr<VMState>) -> ref<Fal
   ;Retrieve the value at the given heap pointer.
   val v = [ref]
   ;Is this a reference to a Stanza heap object?
-  val tagbits = v & 7L
-  if tagbits == 1L :
+  val tagbits = v >> BASE-TAG-BIT
+  if tagbits == 0L :
     ;Remove the tag bits to retrieve the object pointer.
-    val p = (v - 1) as ptr<long>
+    val p = v as ptr<long>
     ;Mark the object, and continue marking the object graph if it
     ;has not previously been marked.
     if test-and-set-mark(p, addr(vms.heap)) == 0 :
@@ -2003,7 +1995,7 @@ lostanza defn read-live-range (location:ptr<long>) -> LiveRange :
   if location0 & 1L :
     ;Case break == 8 bytes.
     val live = addr(location[1])             ;Computed from size of break.
-    val dead = (location0 - 1) as ptr<long>  ;Remove tag bit.
+    val dead = location0 as ptr<long>  ;Remove tag bit.
     return LiveRange{live, dead}
   else :
     ;Case break >= 16 bytes.
@@ -2083,7 +2075,7 @@ lostanza defn clear-relocation-offset (range:LiveRange, vms:ptr<VMState>) -> ref
 lostanza defn update-references (p:ptr<long>, offset:long, vms:ptr<VMState>) -> ref<False> :
   var ref:ptr<long> = [p] as ptr<long>
   val limit = TAG-MASK-IN-HEADER as ptr<long>
-  val new-value = p as long + offset + 1L ;For a tag
+  val new-value = p as long + offset
   while ref > limit :
     val next = [ref] as ptr<long>
     [ref] = new-value
@@ -2096,10 +2088,10 @@ lostanza defn relocate-reference (ref:ptr<long>, vms:ptr<VMState>) -> ref<False>
   ;Retrieve the value at the given heap pointer.
   val v = [ref]
   ;Is this a reference to a Stanza heap object?
-  val tagbits = v & 7L
-  if tagbits == 1L :
+  val tagbits = v >> BASE-TAG-BIT
+  if tagbits == 0L :
     ;Remove the tag bits to retrieve the object pointer.
-    val p = (v - 1) as ptr<long>
+    val p = v as ptr<long>
     ;Only pointers to objects in the compaction area are relocated.
     if p > vms.heap.compaction-start :
       [ref] = v + relocation-offset(p)
@@ -2111,7 +2103,7 @@ lostanza defn relocate-remembered-reference (ref:ptr<long>, vms:ptr<VMState>) ->
   ;Retrieve the value at the given heap pointer.
   val v = [ref]
   ;Remove the tag bits to retrieve the object pointer.
-  val p = (v - 1) as ptr<long>
+  val p = v as ptr<long>
   ;Only pointers to objects in the compaction area are relocated.
   if p > vms.heap.compaction-start :
     [ref] = v + relocation-offset(p)
@@ -2122,10 +2114,10 @@ lostanza defn relocate-or-reverse-reference (ref:ptr<long>, vms:ptr<VMState>) ->
   ;Retrieve the value at the given heap pointer.
   val v = [ref]
   ;Is this a reference to a Stanza heap object?
-  val tagbits = v & 7L
-  if tagbits == 1L :
+  val tagbits = v >> BASE-TAG-BIT
+  if tagbits == 0L :
     ;Remove the tag bits to retrieve the object pointer.
-    val p = (v - 1) as ptr<long>
+    val p = v as ptr<long>
     ;Only pointers to objects in the compaction area are relocated.
     if p > vms.heap.compaction-start :
       ;The heap is scanned from the start to the top. Objects above the reference
@@ -2241,9 +2233,9 @@ lostanza defn check-write-barrier-invariants! (p:ptr<long>, vms:ptr<VMState>) ->
   ;Perform these checks:
   ;Case pointer to young-gen: Ensure that the remembered bit is set.
   val objref = [p]
-  val tagbits = objref & 7L
-  if tagbits == 1L :
-    val objptr = (objref - 1L) as ptr<long>
+  val tagbits = objref >> BASE-TAG-BIT
+  if tagbits == 0L :
+    val objptr = (objref) as ptr<long>
     ;Is the pointer pointing into the young gen?
     if objptr >= heap.old-objects-end :
       ;Error if the remembered bit is not set.
@@ -2334,9 +2326,9 @@ lostanza defn forwarding-pointer? (header-word:long) -> long :
 ;resolve or copy the referenced object.
 lostanza defn copy-object (ref:ptr<long>, vms:ptr<VMState>) -> ref<False> :
   ;Retrieve the value at the given heap pointer and preemptively remove the tag bit.
-  val v = [ref] - 1L
+  val v = [ref]
   ;Is this a reference to a Stanza heap object?
-  if (v & 7L) == 0L :
+  if (v >> BASE-TAG-BIT) == 0L :
     ;Cast the bits to an object pointer.
     val src = v as ptr<long>
     ;Is it in the nursery?
@@ -2347,7 +2339,7 @@ lostanza defn copy-object (ref:ptr<long>, vms:ptr<VMState>) -> ref<False> :
         val dst = vms.heap.top
         vms.heap.top = dst + size
         ;Copy the data and store tagged destination as a forwardng pointer
-        [src] = call-c clib/memcpy(dst, src, size) as long + 1L
+        [src] = call-c clib/memcpy(dst, src, size) as long
       ;Update the reference with the forwarding pointer
       [ref] = [src]
   ;No meaningful return value
@@ -2437,7 +2429,7 @@ lostanza defn update-liveness-trackers (vms:ptr<VMState>) -> ref<False> :
       ;no longer refers to a live Unique object. We can assume that
       ;value currently holds a pointer into the heap otherwise it
       ;wouldn't be in the heap.liveness-trackers list.
-      val value-obj = (tracker-copy.value - 1) as ptr<long>
+      val value-obj = tracker-copy.value as ptr<long>
       if value-obj >= limit :
         val tag = [value-obj]
         if forwarding-pointer?(tag) :
@@ -2649,10 +2641,7 @@ lostanza defn tag (x:ptr<?>) -> long :
     return x as long
 
 public lostanza defn tag-as-ref (x:ptr<?>) -> long :
-  #if-defined(BOOTSTRAP) :
-    return tag(x - 8)
-  #else :
-    return x as long
+  return tag(x - 8)
 
 lostanza defn untag (x:long) -> ptr<?> :
   #if-defined(BOOTSTRAP) :
@@ -2664,7 +2653,7 @@ lostanza defn untag (x:long) -> ptr<?> :
     #if-not-defined(OPTIMIZE) :
       val tagbits = x >> BASE-TAG-BIT
       if tagbits != 0 : fatal("Not a heap-allocated object!")
-    return x as ptr<?>
+    return (x + 8) as ptr<?>
 
 ;Return lower of two pointers.
 lostanza defn min (x:ptr<?>, y:ptr<?>) -> ptr<?> :
@@ -2823,7 +2812,7 @@ lostanza defn scan-liveness-trackers (vms:ptr<VMState>) -> ref<False> :
       ;no longer refers to a live Unique object. We can assume that
       ;value currently holds a pointer into the heap otherwise it
       ;wouldn't be in the heap.liveness-trackers list.
-      val value-obj = (tracker.value - 1) as ptr<?>
+      val value-obj = tracker.value as ptr<?>
       if test-mark(value-obj, bitset-base) == 0 :
         ;The Unique is no longer live so replace the value with
         ;false-marker.
@@ -2894,7 +2883,7 @@ lostanza defn dump-heap (pstart:ptr<long>, pend:ptr<long>, vms:ptr<VMState>) -> 
     if class.item-size == 0 :
       val obj = p as ptr<ObjectLayout>
       val size = class.size
-      call-c clib/printf("  %p: [Object %d, size = %d]", /tag(p), tag, size)
+      call-c clib/printf("  %p: [Object %d = %s, size = %d]", /tag(p), tag, class-name(object-type-id(p as ref<?>)), size)
       for (var i:long = 0, i < size, i = i + 8) :
         call-c clib/printf("  %lx", [p + 8 + i])
       call-c clib/printf("\n")
@@ -2923,7 +2912,8 @@ lostanza defn dump-heap (pstart:ptr<long>, pend:ptr<long>, vms:ptr<VMState>) -> 
 lostanza defn dump-stack (stackref:long, vms:ptr<VMState>) -> int :
   val stk:ptr<Stack> = untag(stackref)
   val f-end = stk.stack-pointer
-  call-c clib/printf("Stack %p (last frame %p):\n", stackref, f-end)
+  ; call-c clib/printf("Stack %p (last frame %p):\n", stackref, f-end)
+  call-c clib/printf("Stack %p (last frame %p) frames %p:\n", stackref, f-end, stk.frames)
   if stk.frames != null :
     labels :
       begin :
@@ -4890,17 +4880,28 @@ defmethod print-all (o:OutputStream, xs:Seqable) :
 ;                 Convenience Functions
 ;                 =====================
 
-lostanza defn print-bits (x:ref<?>) -> ref<False> :
+public lostanza defn print-bits (x:ref<?>) -> ref<False> :
+  val y = 1 + 2 + 3 + 4 + 5
   call-c clib/printf("BITS %llx\n", x)
   return false
 
-lostanza defn print-string (x:ref<String>) -> ref<False> :
-  call-c clib/printf("STR %s\n", addr!(x.chars))
+public lostanza defn print-string (x:ref<String>) -> ref<False> :
+  val y = 1 + 2 + 3 + 4 + 5
+  call-c clib/printf("STR %llx %llx %llx %s\n", x, addr!(x.length), addr!(x.chars), addr!(x.chars))
+  ; call-c clib/printf("STR %s\n", addr!(x.chars))
+  return false
+
+public lostanza defn print-char (x:ref<Char>) -> ref<False> :
+  val y = 1 + 2 + 3 + 4 + 5
+  call-c clib/printf("CHR %c\n", x.value)
+  return false
+
+public lostanza defn print-int (x:ref<Int>) -> ref<False> :
+  val y = 1 + 2 + 3 + 4 + 5
+  call-c clib/printf("INT %d\n", x.value)
   return false
 
 public defn println (o:OutputStream, x) :
-  print-string(object-type(x))
-  print-bits(x)
   print(o, x)
   print(o, NL)
 
@@ -5897,8 +5898,26 @@ public defn StringBuffer (n:Int) -> StringBuffer :
       defmethod add-all (this, xs:Seqable<Char> & Lengthable) :
          val n = length(xs)
          ensure-capacity(len + n)
-         for (x in xs, i in 0 to n) do :
-            buffer[len + i] = x
+         ; for (x in xs, i in 0 to n) do :
+         ;    print-string("D")
+         ;    buffer[len + i] = x
+         val ss = to-seq(xs)
+         ; print-int(len)
+         let loop (i:Int = 0) :
+           if not empty?(ss) and i < n :
+             val c = next(ss)
+             buffer[len + i] = c
+             loop(i + 1)
+         len = len + n
+
+      defmethod add-all (this, xs:String) :
+         val n = length(xs)
+         ensure-capacity(len + n)
+         let loop (i:Int = 0) :
+           if i < n :
+             val c = xs[i]
+             buffer[len + i] = c
+             loop(i + 1)
          len = len + n
 
       defmethod clear (this) :
@@ -5924,7 +5943,14 @@ public defn StringBuffer (n:Int) -> StringBuffer :
          len
 
       defmethod to-string (this) :
-         buffer[0 to len] as String
+         ; print-string("F")
+         ; print-int(len)
+         ; for i in 0 to len do :
+         ;   ; print-string(to-string(buffer[i]))
+         ;   print-char(buffer[i])
+         val res = buffer[0 to len] as String
+         ; print-string("G")
+         res
 
 public defn StringBuffer () :
    StringBuffer(32)
@@ -11426,7 +11452,6 @@ lostanza defn profile-stack-trace () -> ref<False> :
   add(buffer, -1L) ;End stack trace marker 
   [vms.profile-flag] = 0L
   return false
-
 
 ;############################################################
 ;################## Math Package ############################

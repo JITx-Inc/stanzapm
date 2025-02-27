@@ -729,7 +729,7 @@ int stop_sample_profiling () {
 //============== Stanza Entry Function =======================
 //============================================================
 
-#define STACK_TYPE 6
+#define STACK_TYPE 7
 
 stz_long stanza_entry (VMInit* init);
 
