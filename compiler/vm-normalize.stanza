@@ -532,70 +532,6 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
         val tmp = make-local(buffer, VMLong())
         L(tmp, NeOp(), y, z)
         tag-as-bool(x, tmp)
-      (op:IntAddOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, AddOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntSubOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, SubOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntMulOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, MulOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntDivOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, DivOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntModOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, ModOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntAndOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, AndOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntOrOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, OrOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntXorOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, XorOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntShlOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, ShlOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntShrOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, ShrOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntAshrOp) :
-        val tmp = make-local(buffer, VMInt())
-        L(tmp, AshrOp(), detag-int(y), detag-int(z))
-        tag-as-int(x, tmp)
-      (op:IntLtOp) :
-        L(x, LtOp(), detag-int(y), detag-int(z))
-        tag-as-bool(x, x)
-      (op:IntGtOp) :
-        L(x, GtOp(), detag-int(y), detag-int(z))
-        tag-as-bool(x, x)
-      (op:IntLeOp) :
-        L(x, LeOp(), detag-int(y), detag-int(z))
-        tag-as-bool(x, x)
-      (op:IntGeOp) :
-        L(x, GeOp(), detag-int(y), detag-int(z))
-        tag-as-bool(x, x)
-  defn lower (x:Local, op:VMOp, y:VMImm) :
-    match(op) :
-      (op:IntNotOp) :
-        val tmp-int = make-local(buffer, VMInt())
-        L1(tmp-int, NotOp(), detag-int(y))
-        tag-as-int(x, tmp-int)
-      (op:IntNegOp) :
-        L1(x, NegOp(), y)
 
   ;Load single instruction
   ;[normalize each instruction]
@@ -773,7 +709,6 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
             emit(buffer, i)
       (i:Op1Ins) :
         match(op(i)) :
-          (op:VMOp&HiStanza) : lower(x(i) as Local, op, y(i))
           (op:ConvOp) : norm-conv-op(x(i) as Local, y(i))
           (op:InterpretOp) : norm-interpret-op(x(i) as Local, y(i))
           (op:NegOp) : norm-neg-op(x(i) as Local, y(i))
@@ -790,7 +725,6 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
           (op) : norm-unary-op(x(i), op, y(i))
       (i:Op2Ins) :
         match(op(i)) :
-          (op:VMOp&HiStanza) : lower(x(i) as Local, op, y(i), z(i))
           (op:DivOp) : norm-div-op(x(i) as Local, y(i), z(i))
           (op:ModOp) : norm-mod-op(x(i) as Local, y(i), z(i))
           (op:MulOp) : norm-mul-op(x(i) as Local, y(i), z(i))
@@ -997,25 +931,6 @@ public defstruct CArg <: ArgType with: (printer => true)
 ;============================================================
 ;================== Operator Classification =================
 ;============================================================
-
-deftype HiStanza :
-  IntAddOp <: HiStanza
-  IntSubOp <: HiStanza
-  IntMulOp <: HiStanza
-  IntDivOp <: HiStanza
-  IntModOp <: HiStanza
-  IntAndOp <: HiStanza
-  IntOrOp <: HiStanza
-  IntXorOp <: HiStanza
-  IntNotOp <: HiStanza
-  IntShlOp <: HiStanza
-  IntShrOp <: HiStanza
-  IntAshrOp <: HiStanza
-  IntLtOp <: HiStanza
-  IntGtOp <: HiStanza
-  IntLeOp <: HiStanza
-  IntGeOp <: HiStanza
-  IntNegOp <: HiStanza
 
 public deftype Commutative :
   AddOp <: Commutative
@@ -1433,7 +1348,7 @@ defn ensure-normalized (f0:VMFunction, backend:Backend) :
   ;Checks on primitive operations
   defn ensure-lowlevel-ops (i:VMIns) :
     defn ensure-lowlevel (op:VMOp) :
-      match(op:VMOp&HiStanza) :
+      match(op:RefEqOp|RefNeOp) :
         fatal("High-level op %_ remaining." % [op])
     match(i:Op0Ins|Op1Ins|Op2Ins|DualOp2Ins) :
       ensure-lowlevel(op(i))

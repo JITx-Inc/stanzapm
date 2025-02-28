@@ -2352,21 +2352,6 @@ Left Operand Folding / Right Operand Folding:
 
 Arity  | Op        | Guard   | Types  | Stanza Operator | Left Operand Folding | Right Operand Folding
 ======================================================================================================
-Binary | IntAddOp  | Simple  | I      | existing        | Z -> unchanged       | Z -> unchanged
-Binary | IntSubOp  | Simple  | I      | existing        |                      | Z -> unchanged
-Binary | IntMulOp  | Simple  | I      | existing        | ZI -> multiply       | ZI -> multiply
-Binary | IntDivOp  | Guarded | I      | existing        |                      | I -> unchanged
-Binary | IntModOp  | Guarded | I      | existing        |                      | I -> zeroed
-Binary | IntAndOp  | Simple  | I      | existing        | Z -> zeroed          | Z -> zeroed
-Binary | IntOrOp   | Simple  | I      | existing        | Z -> unchanged       | Z -> unchanged
-Binary | IntXorOp  | Simple  | I      | existing        | Z -> unchanged       | Z -> unchanged
-Binary | IntShlOp  | Simple  | I      | existing        | Z -> zeroed          | Z -> unchanged
-Binary | IntShrOp  | Simple  | I      | existing        | Z -> zeroed          | Z -> unchanged
-Binary | IntAshrOp | Simple  | I      | existing        | Z -> zeroed          | Z -> unchanged
-Binary | IntLtOp   | Simple  | I      | existing        |
-Binary | IntGtOp   | Simple  | I      | existing        |
-Binary | IntLeOp   | Simple  | I      | existing        |
-Binary | IntGeOp   | Simple  | I      | existing        |
 Binary | RefEqOp   | Simple  | ?      | existing        |
 Binary | RefNeOp   | Simple  | ?      | existing        |
 Binary | AddOp     | Simple  | BILFD  | existing        | Z -> unchanged       | Z -> unchanged
@@ -2403,21 +2388,6 @@ defmethod fold-binary-op (op:EOp, f:ConstantValue -> EIns|False, a0:ConstantValu
   defn bool-to-long (v:True|False) : 1L when v else 0L
   if same-type?(a0,a1) :
     match(op, a0, a1) :
-      (op:IntAddOp, a0:Int, a1:Int) : f(a0 + a1)
-      (op:IntSubOp, a0:Int, a1:Int) : f(a0 - a1)
-      (op:IntMulOp, a0:Int, a1:Int) : f(a0 * a1)
-      (op:IntDivOp, a0:Int, a1:Int) : f(a0 / a1) when a1 != 0
-      (op:IntModOp, a0:Int, a1:Int) : f(a0 % a1) when a1 != 0
-      (op:IntAndOp, a0:Int, a1:Int) : f(a0 & a1)
-      (op:IntOrOp, a0:Int, a1:Int) : f(a0 | a1)
-      (op:IntXorOp, a0:Int, a1:Int) : f(a0 ^ a1)
-      (op:IntShlOp, a0:Int, a1:Int) : f(a0 << a1)
-      (op:IntShrOp, a0:Int, a1:Int) : f(a0 >> a1)
-      (op:IntAshrOp, a0:Int, a1:Int) : f(a0 >>> a1)
-      (op:IntLtOp, a0:Int, a1:Int) : f(a0 < a1)
-      (op:IntGtOp, a0:Int, a1:Int) : f(a0 > a1)
-      (op:IntLeOp, a0:Int, a1:Int) : f(a0 <= a1)
-      (op:IntGeOp, a0:Int, a1:Int) : f(a0 >= a1)
       (op:RefEqOp, a0:ConstantValue&Equalable, a1:ConstantValue&Equalable) : f(a0 == a1)
       (op:RefNeOp, a0:ConstantValue&Equalable, a1:ConstantValue&Equalable) : f(a0 != a1)
       (op:AddOp, a0:Byte|Int|Long|Float|Double, a1:Byte|Int|Long|Float|Double) : f(call(plus,a0,a1))
@@ -2446,8 +2416,6 @@ defmethod fold-binary-op (op:EOp, f:ConstantValue -> EIns|False, a0:ConstantValu
 defmethod fold-unary-op (op:EOp, f:ConstantValue -> EIns|False, a0:ConstantValue) -> False|EIns :
   defn call<?T> (f:T -> ConstantValue, a:?T) : f(a)
   match(op, a0) :
-    (op:IntNotOp, a0:Int) : f(bit-not(a0))
-    (op:IntNegOp, a0:Int) : f(negate(a0))
     (op:NotOp, a0:Byte|Int|Long) : f(call(bit-not,a0))
     (op:NegOp, a0:Int|Long|Float|Double) : f(call(negate,a0))
     (op:LowestZeroBitCountOp, a0:Long) : f(call(lowest-zero-bit-count,a0))
@@ -2480,14 +2448,6 @@ defmethod partial-fold-binary-op (op:EOp, f:ConstantValue|EImm -> EIns|False, a0
     else if one?(a0) : f(a1)
     else : false
   match(op, a0) :
-    (op:IntAddOp, a0:Int) : Z-to-unchanged()
-    (op:IntMulOp, a0:Int) : ZI-to-multiply()
-    (op:IntAndOp, a0:Int) : Z-to-zeroed()
-    (op:IntOrOp, a0:Int) : Z-to-unchanged()
-    (op:IntXorOp, a0:Int) : Z-to-unchanged()
-    (op:IntShlOp, a0:Int) : Z-to-zeroed()
-    (op:IntShrOp, a0:Int) : Z-to-zeroed()
-    (op:IntAshrOp, a0:Int) : Z-to-zeroed()
     (op:AddOp, a0:Byte|Int|Long|Float|Double) : Z-to-unchanged()
     (op:MulOp, a0:Byte|Int|Long) : ZI-to-multiply()
     (op:MulOp, a0:Float|Double) : I-to-unchanged()
@@ -2513,17 +2473,6 @@ defmethod partial-fold-binary-op (op:EOp, f:ConstantValue|EImm -> EIns|False, a0
     else if one?(a1) : f(a0)
     else : false
   match(op, a1) :
-    (op:IntAddOp, a1:Int) : Z-to-unchanged()
-    (op:IntSubOp, a1:Int) : Z-to-unchanged()
-    (op:IntMulOp, a1:Int) : ZI-to-multiply()
-    (op:IntDivOp, a1:Int) : I-to-unchanged()
-    (op:IntModOp, a1:Int) : I-to-zeroed()
-    (op:IntAndOp, a1:Int) : Z-to-zeroed()
-    (op:IntOrOp, a1:Int) : Z-to-unchanged()
-    (op:IntXorOp, a1:Int) : Z-to-unchanged()
-    (op:IntShlOp, a1:Int) : Z-to-unchanged()
-    (op:IntShrOp, a1:Int) : Z-to-unchanged()
-    (op:IntAshrOp, a1:Int) : Z-to-unchanged()
     (op:AddOp, a1:Byte|Int|Long|Float|Double) : Z-to-unchanged()
     (op:SubOp, a1:Byte|Int|Long|Float|Double) : Z-to-unchanged()
     (op:MulOp, a1:Byte|Int|Long) : ZI-to-multiply()
@@ -2558,9 +2507,7 @@ defn classify-eimm (eimm:EImm) -> ClassifiedEImm :
 
 ;Returns true if the given op has a HiStanza return value.
 defn histanza? (op:EOp) -> True|False :
-  op is IntAddOp|IntSubOp|IntMulOp|IntDivOp|IntModOp|IntAndOp|
-        IntOrOp|IntXorOp|IntNotOp|IntShlOp|IntShrOp|IntAshrOp|
-        IntLtOp|IntGtOp|IntLeOp|IntGeOp|IntNegOp|RefEqOp|RefNeOp
+  op is RefEqOp|RefNeOp
 
 ;------------------------------------------------------------
 ;---------- Classify and Fold Over Primitive Op -------------

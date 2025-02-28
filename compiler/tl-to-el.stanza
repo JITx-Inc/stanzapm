@@ -1057,23 +1057,6 @@ defn to-eop (op:Primitive) -> [EOp, EType] :
   val int = EOf(env-id(CORE-INT-ID))
   val bool = EOr(EOf(env-id(CORE-TRUE-ID)), EOf(env-id(CORE-FALSE-ID)))
   switch(op) :
-    ADD-OP : [IntAddOp(), int]
-    SUB-OP : [IntSubOp(), int]
-    MUL-OP : [IntMulOp(), int]
-    DIV-OP : [IntDivOp(), int]
-    MOD-OP : [IntModOp(), int]
-    AND-OP : [IntAndOp(), int]
-    OR-OP :  [IntOrOp(), int]
-    XOR-OP : [IntXorOp(), int]
-    SHL-OP : [IntShlOp(), int]
-    SHR-OP : [IntShrOp(), int]
-    ASHR-OP : [IntAshrOp(), int]
-    NOT-OP : [IntNotOp(), int]
-    NEG-OP : [IntNegOp(), int]
-    LT-OP : [IntLtOp(), bool]
-    GT-OP : [IntGtOp(), bool]
-    LE-OP : [IntLeOp(), bool]
-    GE-OP : [IntGeOp(), bool]
     EQ-OP : [RefEqOp(), bool]
     NE-OP : [RefNeOp(), bool]
     IDENTICAL-OP : [RefEqOp(), bool]

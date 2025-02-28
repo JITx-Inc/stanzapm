@@ -389,8 +389,6 @@ public defn op0-opcode (op:VMOp) -> Int :
 ;Returns false if operation becomes a set operation.
 public defn op1-opcode (op:VMOp, xt:VMType|False, yt:VMType) -> Int|False :
   match(op, xt, yt) :
-    (op:IntNotOp, xt:VMRef, yt:VMRef) : INT-NOT-OPCODE
-    (op:IntNegOp, xt:VMRef, yt:VMRef) : INT-NEG-OPCODE
     (op:NotOp, xt:VMByte, yt:VMByte) : NOT-OPCODE-BYTE
     (op:NotOp, xt:VMInt, yt:VMInt) : NOT-OPCODE-INT
     (op:NotOp, xt:VMLong, yt:VMLong) : NOT-OPCODE-LONG
@@ -439,21 +437,6 @@ public defn op1-opcode (op:VMOp, xt:VMType|False, yt:VMType) -> Int|False :
 
 public defn op2-opcode (op:VMOp, xt:VMType|False, yt:VMType) -> Int :
   match(op, xt, yt) :
-    (op:IntAddOp, xt:VMRef, yt:VMRef) : INT-ADD-OPCODE
-    (op:IntSubOp, xt:VMRef, yt:VMRef) : INT-SUB-OPCODE
-    (op:IntMulOp, xt:VMRef, yt:VMRef) : INT-MUL-OPCODE
-    (op:IntDivOp, xt:VMRef, yt:VMRef) : INT-DIV-OPCODE
-    (op:IntModOp, xt:VMRef, yt:VMRef) : INT-MOD-OPCODE
-    (op:IntAndOp, xt:VMRef, yt:VMRef) : INT-AND-OPCODE
-    (op:IntOrOp, xt:VMRef, yt:VMRef) : INT-OR-OPCODE
-    (op:IntXorOp, xt:VMRef, yt:VMRef) : INT-XOR-OPCODE
-    (op:IntShlOp, xt:VMRef, yt:VMRef) : INT-SHL-OPCODE
-    (op:IntShrOp, xt:VMRef, yt:VMRef) : INT-SHR-OPCODE
-    (op:IntAshrOp, xt:VMRef, yt:VMRef) : INT-ASHR-OPCODE
-    (op:IntLtOp, xt:VMRef, yt:VMRef) : INT-LT-OPCODE
-    (op:IntGtOp, xt:VMRef, yt:VMRef) : INT-GT-OPCODE
-    (op:IntLeOp, xt:VMRef, yt:VMRef) : INT-LE-OPCODE
-    (op:IntGeOp, xt:VMRef, yt:VMRef) : INT-GE-OPCODE
     (op:RefEqOp, xt:VMRef, yt:VMRef) : REF-EQ-OPCODE
     (op:RefNeOp, xt:VMRef, yt:VMRef) : REF-NE-OPCODE
     (op:EqOp, xt:VMLong, yt:VMRef) : EQ-OPCODE-REF
@@ -544,10 +527,6 @@ public defn op2-opcode (op:VMOp, xt:VMType|False, yt:VMType) -> Int :
 
 public defn branch2-opcode (op:VMOp, xt:VMType) -> Int :
   match(op, xt) :
-    (op:IntLtOp, xt:VMRef) : JUMP-INT-LT-OPCODE
-    (op:IntGtOp, xt:VMRef) : JUMP-INT-GT-OPCODE
-    (op:IntLeOp, xt:VMRef) : JUMP-INT-LE-OPCODE
-    (op:IntGeOp, xt:VMRef) : JUMP-INT-GE-OPCODE
     (op:EqOp, xt:VMRef) : JUMP-EQ-OPCODE-REF
     (op:EqOp, xt:VMByte) : JUMP-EQ-OPCODE-BYTE
     (op:EqOp, xt:VMInt) : JUMP-EQ-OPCODE-INT

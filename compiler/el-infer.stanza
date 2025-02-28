@@ -444,15 +444,7 @@ defn analyze-single-block (emit:Ins -> ?,
     ;Helper: If the given primitive operation returns a guaranteed reftype
     ;then return it.
     defn op-result-type (op:EOp) -> EType|False :
-      match(op) :
-        (op:IntAddOp|IntSubOp|IntMulOp|IntDivOp|IntModOp|
-            IntAndOp|IntOrOp|IntXorOp|IntNotOp|IntShlOp|
-            IntShrOp|IntAshrOp|IntNegOp) :
-          core-type(vt, CORE-INT-ID)
-        (op:IntLtOp|IntGtOp|IntLeOp|IntGeOp) : 
-          EOr(core-type(vt, CORE-FALSE-ID),
-              core-type(vt, CORE-TRUE-ID))
-        (op) : false
+      false
  
     ;Helper: Return true if the return type of the given function
     ;is trusted.
