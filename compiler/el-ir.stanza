@@ -413,7 +413,7 @@ public defstruct EPrim <: EIns :
 public defstruct EIf <: EIns :
   n1: Int with: (updater => sub-n1)
   n2: Int with: (updater => sub-n2)
-  op: EOp|False
+  op: EOp|False with: (updater => sub-op)
   ys: Tuple<EImm>
 public defstruct EMatch <: EIns :
   ys: Tuple<EImm> with: (ensure => not-empty!)

@@ -568,12 +568,12 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
               else if x == id-indices[CORE-DOUBLE-ID] : INT(DOUBLE-TAG-BITS-MIN)
               else : fatal("Not a primitive type")
             val op = GtOp() when (x == id-indices[CORE-DOUBLE-ID]) else EqOp()
-            E $ BreakL(target, op, BITS, tagbits)
+            E $ BreakI(target, op, BITS, tagbits)
 
           ;Skip the reference branches if the object is not a reference.
           val label-after-refs = M(marker-branches) when marker-targets?
                             else default-target
-          if ref-targets? : E $ BreakL(label-after-refs, NeOp(), BITS, INT(REF-TAG-BITS))
+          if ref-targets? : E $ BreakI(label-after-refs, NeOp(), BITS, INT(REF-TAG-BITS))
           else if not marker-targets? : E $ Goto(label-after-refs)
 
           ;Jump to the appropriate reference branches if the object
@@ -589,7 +589,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
               match(tree) :
                 (tree:InnerNode<Imm>) :
                   val left-tree = unique-id(stubs)
-                  E $ BreakL(M(left-tree), UleOp(), TAG, IntImm(value(tree)))
+                  E $ BreakI(M(left-tree), UleOp(), TAG, IntImm(value(tree)))
                   loop(right(tree))
                   E $ Label(left-tree)
                   loop(left(tree))
@@ -597,7 +597,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
                   for e in entries(tree) do :
                     val x = key(e)
                     val target = value(e)
-                    E $ BreakL(target, EqOp(), TAG, IntImm(x))
+                    E $ BreakI(target, EqOp(), TAG, IntImm(x))
                   E $ Goto(default-target)
 
           ;Jump to the appropriate marker branches if the object is one
@@ -607,15 +607,13 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
               BinaryNode $ for e in marker-targets seq :
                 val header = tag-imm(key(e), false)
                 (value(header) as Int) => value(e)
-            E $ BreakL(default-target, NeOp(), BITS, INT(MARKER-TAG-BITS))
+            E $ BreakI(default-target, NeOp(), BITS, INT(MARKER-TAG-BITS))
             E $ Label(marker-branches)
-            E $ ShlL(object, object, IntImm(32)) ; CLEAR TAGS
-            E $ ShrL(object, object, IntImm(32))
             let loop (tree:BinaryNode<Imm> = marker-tree()) :
               match(tree) :
                 (tree:InnerNode<Imm>) :
                   val left-tree = unique-id(stubs)
-                  E $ BreakL(M(left-tree), UleOp(), object, IntImm(value(tree)))
+                  E $ BreakI(M(left-tree), UleOp(), object, IntImm(value(tree)))
                   loop(right(tree))
                   E $ Label(left-tree)
                   loop(left(tree))
@@ -623,7 +621,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
                   for e in entries(tree) do :
                     val x = key(e)
                     val target = value(e)
-                    E $ BreakL(target, EqOp(), object, IntImm(x))
+                    E $ BreakI(target, EqOp(), object, IntImm(x))
                   E $ Goto(default-target)
 
       ;Emit all entries
@@ -690,12 +688,12 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
               else if x == id-indices[CORE-DOUBLE-ID] : INT(DOUBLE-TAG-BITS-MIN)
               else : fatal("Not a primitive type")
             val op = GtOp() when (x == id-indices[CORE-DOUBLE-ID]) else EqOp()
-            E $ BreakL(M(pass-lbl), op, BITS, tagbits)
+            E $ BreakI(M(pass-lbl), op, BITS, tagbits)
 
           ;Skip the reference branches if the object is not a reference.
           val label-after-refs = M(marker-branches) when marker-targets?
                             else M(end-lbl)
-          if ref-targets? : E $ BreakL(label-after-refs, NeOp(), BITS, INT(REF-TAG-BITS))
+          if ref-targets? : E $ BreakI(label-after-refs, NeOp(), BITS, INT(REF-TAG-BITS))
           else if not marker-targets? : E $ Goto(label-after-refs)
 
           ;Ref branches
@@ -703,17 +701,15 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
             E $ Label(ref-branches)
             E $ LoadL(TAG, OBJ)
             for x in refs do :
-              E $ BreakL(M(pass-lbl), EqOp(), TAG, tag-imm(x, false))
+              E $ BreakI(M(pass-lbl), EqOp(), TAG, tag-imm(x, false))
             E $ Goto(M(end-lbl))
 
           ;Marker branches
           if marker-targets?: 
-            E $ BreakL(M(end-lbl), NeOp(), BITS, INT(MARKER-TAG-BITS))
+            E $ BreakI(M(end-lbl), NeOp(), BITS, INT(MARKER-TAG-BITS))
             E $ Label(marker-branches)
-            E $ ShlL(OBJ, OBJ, IntImm(32)) ; CLEAR TAGS
-            E $ ShrL(OBJ, OBJ, IntImm(32))
             for x in markers do :
-              E $ BreakL(M(pass-lbl), EqOp(), OBJ, tag-imm(x,false))
+              E $ BreakI(M(pass-lbl), EqOp(), OBJ, tag-imm(x,false))
             E $ Goto(M(end-lbl))
 
           ;Pass and failure labels

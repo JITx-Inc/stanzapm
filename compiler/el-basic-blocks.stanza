@@ -30,6 +30,8 @@ public defstruct BBlock :
   successors: Tuple<Int>
   predecessors: Tuple<Int>
   instructions: Tuple<EIns>
+with:
+  printer => true
 
 ;============================================================
 ;====================== Algorithm ===========================

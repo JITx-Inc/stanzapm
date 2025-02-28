@@ -18,6 +18,7 @@ defpackage stz/el :
     prefix(Top) => Dag
   import stz/el-unique-ids
   import stz/el-freevars
+  import stz/el-basic-blocks
   import stz/verbose
   import core/stack-trace
   import stz/timing-log-api
@@ -135,6 +136,8 @@ defn lower (epackage:EPackage, optimize?:True|False, profile?:True|False, covera
       run-pass("Remove Boxes", remove-boxes, "remove-boxes2", false)
       ;Stabilize
       run-pass("Constant Fold Beta Reduce", iterative-constant-fold-beta-reduce, "constant-fold-beta-reduce", false)
+      run-pass("Peephole", peephole, "peephole", false)
+      run-pass("Optimize Basic Blocks", optimize-basic-blocks, "optimize-basic-blocks", false)
       run-pass("Eliminate Dead Code", eliminate-dead-code, "dead-code3", false)
       ;Finish by removing checks
       run-pass("Force Remove Checks", force-remove-checks, "removed-checks", false)
@@ -2647,6 +2650,14 @@ defn try-constant-fold (epackage:EPackage, gvt:VarTable) -> EPackage|False :
               record-progress()
               ins
             (f:False) : i
+        (e:ELoad) :
+          attempt :
+            val field = loc(e) as? EField
+            val v = y(loc(field) as? EDeref) as? ELiteral
+            fail() when index(field) != 0
+            fail() when value(v) is-not Byte|Char|Int|Float|Double
+            EDef(x(e), ELSLiteral(value(v)))
+          else : i
         (i:EConv) :
           ;Create EDef instruction out of ConstantValue.
           defn make-def (v:ConstantValue) -> EDef :
@@ -3810,6 +3821,142 @@ defn remove-boxes (epackage:EPackage, gvt:VarTable) -> EPackage :
     remove-boxes(analyze-freevars(texp, vt), vt) as ETExp
 
 ;============================================================
+;================ PEEPHOLE OPTIMIZATIONS ====================
+;============================================================
+
+val trace-peephole? = false
+
+defstruct InsRewrite :
+  off : Int
+  new-ins : EIns
+with:
+  printer => true
+
+defn trace-if (inz:PeekSeq<[Int,EIns]>, i:Int) :
+  ; if not empty?(inz) :
+  ;   println("MATCHED %_: %_" % [i, peek(inz)])
+  false
+
+defn match-if-match (inz:PeekSeq<[Int,EIns]>, vt:VarTable) -> Maybe<InsRewrite> :
+  defn do-next? () -> [Int, EIns] :
+    let loop () :
+      val [off,i] = next(inz)
+      match(i:ELive) : loop()
+      else: [off,i]
+  defn next? () -> EIns : do-next?()[1] as? EIns
+  defn cmp-op? (o:EOp) : o is EqOp|NeOp|LtOp|GtOp|LeOp|GeOp|UleOp|UltOp|UgtOp|UgeOp
+  defn cmp? (i:EIf) -> EIf : (fail() when not cmp-op?(op(i) as? EOp), i)
+  defn ls-lit? (x:EImm, v) : fail() when value(x as? ELSLiteral) != v
+  defn ls-lit-def? (i:EDef, v) : (ls-lit?(y(i) as? EImm, v), i)
+  defn label? (i:ELabel, lbl:Int) : fail() when n(i) != lbl
+  defn goto? (i:EGoto, lbl:Int) -> EGoto : (fail() when lbl != n(i), i)
+  defn branch? (i:EBranch, t:EType) -> EBranch : (fail() when types(i)[0] != t, i)
+  defn match? (i:EMatch, args:Tuple<EVar>, num-branches:Int) -> EMatch :
+    defn same-vars? (args0:Tuple<EImm>, args1:Tuple<EVar>) :
+      for (a0 in args0, a1 in args1) all? : match(a0:EVar) : n(a0) == n(a1)
+    fail() when not (same-vars?(ys(i), args) and length(branches(i)) == num-branches)
+    i
+    
+  attempt :
+    trace-if(inz, 0)
+    val [cmp-off, ecmp?] = do-next?()
+    trace-if(inz, 1)
+    val ecmp = cmp?(ecmp? as? EIf)
+    trace-if(inz, 2)
+    label?(next?() as? ELabel, n2(ecmp))
+    trace-if(inz, 3)
+    val def-bool-1 = ls-lit-def?(next?() as? EDef, false)
+    trace-if(inz, 4)
+    val match-lbl = n(next?() as? EGoto)
+    trace-if(inz, 5)
+    label?(next?() as? ELabel, n1(ecmp))
+    trace-if(inz, 6)
+    val def-bool-2 = ls-lit-def?(next?() as? EDef, true)
+    trace-if(inz, 7)
+    fail() when n(x(def-bool-2)) != n(x(def-bool-1))
+    trace-if(inz, 8)
+    goto?(next?() as? EGoto, match-lbl)
+    trace-if(inz, 9)
+    label?(next?() as? ELabel, match-lbl)
+    trace-if(inz, 10)
+    val ematch = match?(next?() as? EMatch, [EVar(n(x(def-bool-1)))], 2)
+    trace-if(inz, 11)
+    val true-branch  = branch?(branches(ematch)[0], EOf(n(iotable(vt), CORE-TRUE-ID)))
+    trace-if(inz, 12)
+    val false-branch = branch?(branches(ematch)[1], EOf(n(iotable(vt), CORE-FALSE-ID)))
+    trace-if(inz, 13)
+    One(InsRewrite(cmp-off, EIf(n(true-branch), n(false-branch), op(ecmp), ys(ecmp))))
+  else :
+    None()
+    
+defn peephole (epackage:EPackage, gvt:VarTable) -> EPackage :
+  defn peephole-in-body (e:EBody, vt:VarTable) -> EBody :
+    ;; println("--- BEFORE ---")
+    ;; for (ins in ins(e), i in 0 to false) do: println("%_: %_" % [i, ins])
+    val inz = PeekSeq(zip(0 to false, ins(e)))
+    val rewrites = Queue<InsRewrite>()
+    let loop (prev-idx:Int = 0) :
+      match(match-if-match(inz, vt)) :
+        (ir:One<InsRewrite>) :
+          add(rewrites, value(ir))
+          println("--- FOUND IF %_" % [value(ir)]) when trace-peephole?
+        (none) : false
+      if not empty?(inz) :
+        val [now-idx, now-ins] = peek(inz)
+        val nxt-idx = if now-idx == prev-idx: (next(inz), now-idx + 1)
+                      else : now-idx
+        loop(nxt-idx)
+    if empty?(rewrites) :
+      e
+    else :
+      ;; if not empty?(rewrites): for ins in ins(e) do : println(ins)
+      val new-ins = to-tuple $ for (ins in ins(e), j in 0 to false) seq :
+        if empty?(rewrites) :
+          ins
+        else :
+          val rewrite = peek(rewrites)
+          if j == off(rewrite) :
+            (pop(rewrites), new-ins(rewrite)) ;; println("REWRITING %_: %_" % [j, new-ins(rewrite)])
+          else :
+            ins
+      sub-ins(e, new-ins)
+  defn peephole-texp (x:ETExp, vt:VarTable) :
+    val result = let loop (x:ELBigItem = x) :
+      match(map(loop, x)) :
+        (e:EBody) : peephole-in-body(e,vt)
+        (e) : e
+    result as ETExp
+  map-with-var-table(peephole-texp, gvt, epackage)
+
+;============================================================
+;============== OPTIMIZATION BASIC BLOCKS ===================
+;============================================================
+
+defn optimize-basic-blocks (epackage:EPackage, gvt:VarTable) -> EPackage :
+  defn optimize-in-body (e:EBody, vt:VarTable) -> EBody :
+    val bbt = analyze-basic-blocks(ins(e))
+    val bbs = to-tuple $ bbt
+    val reachable = let loop (destinations:IntSet = IntSet(), reachable:IntSet = to-intset $ seq(lbl, bbs)) :
+      ; println("REACHABLE(%_) %_" % [length(reachable), reachable])
+      clear(destinations)
+      add(destinations, lbl(bbs[0]))
+      for bb-id in reachable do :
+        add-all(destinations, successors(bbt[bb-id]))
+      ; println("DESTINATIONS(%_) %_" % [length(destinations), destinations])
+      if length(destinations) != length(reachable) :
+        loop(reachable, destinations)
+      else :
+        reachable
+    sub-ins(e, to-tuple $ seq-cat(instructions, filter({ reachable[lbl(_)] }, bbs)))
+  defn optimize-texp (x:ETExp, vt:VarTable) :
+    val result = let loop (x:ELBigItem = x) :
+      match(map(loop, x)) :
+        (e:EBody) : optimize-in-body(e,vt)
+        (e) : e
+    result as ETExp
+  map-with-var-table(optimize-texp, gvt, epackage)
+
+;============================================================
 ;==================== BOX-UNBOX-FOLD ========================
 ;============================================================
 
@@ -3848,13 +3995,16 @@ defn box-unbox-fold (epackage:EPackage, gvt:VarTable) -> EPackage :
   ;Compute binding table.
   ;Every entry in the binding table, x => e, indicates that
   ;x is defined exactly once by the EObject, ENewObject, EPtr instruction.
-  defn binding-table (e:EBody) -> IntTable<EObject|ENewObject|EPtr> :
-    val table = IntListTable<EObject|ENewObject|EPtr>()
+  defn binding-table (e:EBody) -> IntTable<EObject|ENewObject|EPtr|EPrim> :
+    val table = IntListTable<EObject|ENewObject|EPtr|EPrim>()
     val remove-set = IntSet()
     for i in ins(e) do :
-      match(i:EObject|ENewObject|EPtr) : add(table, n(x(i)), i)
+      match(i:EObject|ENewObject|EPtr|EPrim) :
+        match(x(i)) :
+          (v:EVarLoc) : add(table, n(v), i)
+          (v:False) : false
       else : do(add{remove-set, n(_)}, varlocs(i))
-    to-inttable<EObject|ENewObject|EPtr> $
+    to-inttable<EObject|ENewObject|EPtr|EPrim> $
       for entry in table seq? :
         if remove-set[key(entry)] : None()
         else if length(value(entry)) == 1 : One(key(entry) => head(value(entry)))
@@ -3871,7 +4021,7 @@ defn box-unbox-fold (epackage:EPackage, gvt:VarTable) -> EPackage :
   ;Calls fail() if not a match.
   defn unbox-call-ptr (e:ECall,
                        vt:VarTable,
-                       bindings:IntTable<EObject|ENewObject|EPtr>) -> EVar :
+                       bindings:IntTable<EObject|ENewObject|EPtr|EPrim>) -> EVar :
     fail() when calltype(e) is-not CallPtr
     val v = f(e) as? EVar
     val p = get?(bindings, n(v)) as? EPtr
@@ -3883,7 +4033,7 @@ defn box-unbox-fold (epackage:EPackage, gvt:VarTable) -> EPackage :
   ;field. Calls fail() if not a match.
   defn unbox-object-get (e:EObjectGet,
                          vt:VarTable,
-                         bindings:IntTable<EObject|ENewObject|EPtr>) -> [EVarLoc, EImm] :
+                         bindings:IntTable<EObject|ENewObject|EPtr|EPrim>) -> [EVarLoc, EImm] :
     val v = y(e) as? EVar
     val o = get?(bindings, n(v)) as? ENewObject
 
@@ -3904,7 +4054,7 @@ defn box-unbox-fold (epackage:EPackage, gvt:VarTable) -> EPackage :
   ;Calls fail() if not a match.
   defn unbox-load (e:ELoad,
                    vt:VarTable,
-                   bindings:IntTable<EObject|ENewObject|EPtr>) -> [EVarLoc, EImm] :
+                   bindings:IntTable<EObject|ENewObject|EPtr|EPrim>) -> [EVarLoc, EImm] :
     val field = loc(e) as? EField
     val v = y(loc(field) as? EDeref) as? EVar
     val o = get?(bindings, n(v)) as? EObject
@@ -3917,6 +4067,16 @@ defn box-unbox-fold (epackage:EPackage, gvt:VarTable) -> EPackage :
     val value = ys(o)[index(field)]
     fail() when not immutable?(vt,value)
     [x(e), value]
+
+  defn cmp-from-if (e:EIf,
+                    vt:VarTable,
+                    bindings:IntTable<EObject|ENewObject|EPtr|EPrim>) -> EPrim :
+    fail() when op(e) is-not False
+    val v = ys(e)[0] as? EVar
+    val prim = get?(bindings, n(v)) as? EPrim
+    fail() when not immutable?(vt,v)
+    fail() when op(prim) is-not EqOp|NeOp|LtOp|GtOp|LeOp|GeOp|UleOp|UltOp|UgeOp
+    prim
 
   ;Perform unboxing folds in the given body.
   ;Assumes that all nested bodies have already been folded.
@@ -3941,6 +4101,11 @@ defn box-unbox-fold (epackage:EPackage, gvt:VarTable) -> EPackage :
           attempt :
             val f = unbox-call-ptr(i, vt, bindings)
             sub-calltype(sub-f(i, f), CallStanza())
+          else : i
+        (i:EIf) :
+          attempt :
+            val cmp = cmp-from-if(i, vt, bindings)
+            EIf(n1(i), n2(i), op(cmp), ys(cmp))
           else : i
         (i) : i
 

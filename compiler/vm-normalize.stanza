@@ -55,9 +55,8 @@ public defn normalize (prog:VMPackage, backend:Backend) -> NormVMPackage :
     val funcs* = for f in funcs(prog) map :
       val func* = normalize(func(f), databuffer, backend, iotable, extern-table[id(f)])
       sub-func(f, func*)
-    dump(prog, "logs")
     val norm-package = NormVMPackage(sub-funcs(prog, funcs*), datas(databuffer))
-    dump(norm-package, "logs")
+    ; dump(norm-package, "logs")
     norm-package
 
 ;============================================================
