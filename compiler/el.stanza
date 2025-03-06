@@ -3921,7 +3921,7 @@ defn peephole-if-labels (epackage:EPackage, gvt:VarTable) -> EPackage :
       match(match-if-label(inz)) :
         (ir:One<InsRewrite>) :
           add(rewrites, value(ir))
-          println("--- FOUND IF/LABEL %_" % [value(ir)]) when trace-peephole?
+          ; println("--- FOUND IF/LABEL %_" % [value(ir)]) when trace-peephole?
         (none) : false
       if not empty?(inz) :
         val [now-idx, now-ins] = peek(inz)
