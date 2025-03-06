@@ -138,6 +138,7 @@ defn lower (epackage:EPackage, optimize?:True|False, profile?:True|False, covera
       run-pass("Constant Fold Beta Reduce", iterative-constant-fold-beta-reduce, "constant-fold-beta-reduce", false)
       run-pass("Peephole", peephole, "peephole", false)
       run-pass("Optimize Basic Blocks", optimize-basic-blocks, "optimize-basic-blocks", false)
+      run-pass("Peephole-if-labels", peephole-if-labels, "peephole-if-labels", false)
       run-pass("Eliminate Dead Code", eliminate-dead-code, "dead-code3", false)
       ;Finish by removing checks
       run-pass("Force Remove Checks", force-remove-checks, "removed-checks", false)
@@ -3771,7 +3772,7 @@ defn remove-boxes (epackage:EPackage, gvt:VarTable) -> EPackage :
 ;================ PEEPHOLE OPTIMIZATIONS ====================
 ;============================================================
 
-val trace-peephole? = false
+val trace-peephole? = true
 
 defstruct InsRewrite :
   off : Int
@@ -3847,6 +3848,80 @@ defn peephole (epackage:EPackage, gvt:VarTable) -> EPackage :
         (ir:One<InsRewrite>) :
           add(rewrites, value(ir))
           println("--- FOUND IF %_" % [value(ir)]) when trace-peephole?
+        (none) : false
+      if not empty?(inz) :
+        val [now-idx, now-ins] = peek(inz)
+        val nxt-idx = if now-idx == prev-idx: (next(inz), now-idx + 1)
+                      else : now-idx
+        loop(nxt-idx)
+    if empty?(rewrites) :
+      e
+    else :
+      ;; if not empty?(rewrites): for ins in ins(e) do : println(ins)
+      val new-ins = to-tuple $ for (ins in ins(e), j in 0 to false) seq :
+        if empty?(rewrites) :
+          ins
+        else :
+          val rewrite = peek(rewrites)
+          if j == off(rewrite) :
+            (pop(rewrites), new-ins(rewrite)) ;; println("REWRITING %_: %_" % [j, new-ins(rewrite)])
+          else :
+            ins
+      sub-ins(e, new-ins)
+  defn peephole-texp (x:ETExp, vt:VarTable) :
+    val result = let loop (x:ELBigItem = x) :
+      match(map(loop, x)) :
+        (e:EBody) : peephole-in-body(e,vt)
+        (e) : e
+    result as ETExp
+  map-with-var-table(peephole-texp, gvt, epackage)
+
+defn opposite-op (o:EOp) -> EOp :
+  match(o) :
+    (o:EqOp) : NeOp()
+    (o:NeOp) : EqOp()
+    (o:LtOp) : GeOp()
+    (o:GeOp) : LtOp()
+    (o:GtOp) : LeOp()
+    (o:LeOp) : GtOp()
+    (o:UltOp) : UgeOp()
+    (o:UgeOp) : UltOp()
+    (o:UgtOp) : UleOp()
+    (o:UleOp) : UgtOp()
+
+defn match-if-label (inz:PeekSeq<[Int,EIns]>) -> Maybe<InsRewrite> :
+  defn do-next? () -> [Int, EIns] :
+    let loop () :
+      val [off,i] = next(inz)
+      match(i:ELive) : loop()
+      else: [off,i]
+  defn next? () -> EIns : do-next?()[1] as? EIns
+  defn cmp-op? (o:EOp) : o is EqOp|NeOp|LtOp|GtOp|LeOp|GeOp|UleOp|UltOp|UgtOp|UgeOp
+  defn cmp? (i:EIf) -> EIf : (fail() when not cmp-op?(op(i) as? EOp), i)
+  defn label? (i:ELabel, lbl:Int) : fail() when n(i) != lbl
+    
+  attempt :
+    trace-if(inz, 0)
+    val [cmp-off, ecmp?] = do-next?()
+    trace-if(inz, 1)
+    val ecmp = cmp?(ecmp? as? EIf)
+    trace-if(inz, 2)
+    label?(next?() as? ELabel, n1(ecmp))
+    One(InsRewrite(cmp-off, EIf(n2(ecmp), n1(ecmp), opposite-op(op(ecmp) as EOp), ys(ecmp))))
+  else :
+    None()
+    
+defn peephole-if-labels (epackage:EPackage, gvt:VarTable) -> EPackage :
+  defn peephole-in-body (e:EBody, vt:VarTable) -> EBody :
+    ;; println("--- BEFORE ---")
+    ;; for (ins in ins(e), i in 0 to false) do: println("%_: %_" % [i, ins])
+    val inz = PeekSeq(zip(0 to false, ins(e)))
+    val rewrites = Queue<InsRewrite>()
+    let loop (prev-idx:Int = 0) :
+      match(match-if-label(inz)) :
+        (ir:One<InsRewrite>) :
+          add(rewrites, value(ir))
+          println("--- FOUND IF/LABEL %_" % [value(ir)]) when trace-peephole?
         (none) : false
       if not empty?(inz) :
         val [now-idx, now-ins] = peek(inz)

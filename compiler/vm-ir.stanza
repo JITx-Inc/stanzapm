@@ -36,7 +36,7 @@ public val EXECUTE-TOPLEVEL-COMMAND-FN = 3
 public val PROFILE-STACK-TRACE-FN = 4
 public val NUM-BUILTIN-FNS = 5
 
-public val BASE-TAG-BIT = 48L
+public val BASE-TAG-BIT = 46L
 public val REF-TAG-BIT = 0L
 public val INT-TAG-BIT = 0L
 public val MARKER-TAG-BIT = 1L

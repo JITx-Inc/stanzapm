@@ -1345,14 +1345,6 @@ defn ensure-normalized (f0:VMFunction, backend:Backend) :
     for r in records(r) do :
       ensure-local(arg(r) as VMImm)
 
-  ;Checks on primitive operations
-  defn ensure-lowlevel-ops (i:VMIns) :
-    defn ensure-lowlevel (op:VMOp) :
-      match(op:RefEqOp|RefNeOp) :
-        fatal("High-level op %_ remaining." % [op])
-    match(i:Op0Ins|Op1Ins|Op2Ins|DualOp2Ins) :
-      ensure-lowlevel(op(i))
-
   ;Ensure that the given local does not have type byte
   defn ensure-not-byte (x:Local) :
     fatal("Local %_ has type byte." % [x]) when type(buffer,x) is VMByte
@@ -1441,7 +1433,6 @@ defn ensure-normalized (f0:VMFunction, backend:Backend) :
 
     ;General checks
     ensure-operand-sizes(i)
-    ensure-lowlevel-ops(i)
 
 ;============================================================
 ;================== Data Buffer =============================

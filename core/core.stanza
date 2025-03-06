@@ -310,19 +310,15 @@ defn arity-message (arity:Int) :
   "Function cannot be called with %_ arguments." % [arity]
 
 protected defn no-method-error (multi:String, args:Tuple) :
-  print-string("NO-METHOD-ERROR\n")
   fatal("Multi %_ has no appropriate method for arguments of type (%,)." % [multi, seq(object-type,args)])
 
 protected defn amb-method-error (multi:String, args:Tuple) :
-  print-string("AMB-METHOD-ERROR\n")
   fatal("Multi %_ has multiple appropriate methods for arguments of type (%,)." % [multi, seq(object-type,args)])
 
 protected defn no-branch-error (args:Tuple) :
-  print-string("NO-BRANCH-ERROR\n")
   fatal("No appropriate branch for arguments of type (%,)." % [seq(object-type, args)])
 
 protected defn amb-branch-error (args:Tuple) :
-  print-string("AMB-BRANCH-ERROR\n")
   fatal("Multiple appropriate branches for arguments of type (%,)." % [seq(object-type, args)])
 
 protected lostanza defn tuple-length-error (actual-len:long, expected-len:long) -> ref<Void> :
@@ -331,7 +327,6 @@ defn tuple-length-message (actual-len:Int, expected-len:Int) :
   "Cannot destructure tuple of length %_ into %_ items." % [actual-len, expected-len]
 
 protected defn variable-uninitialized-error (name:String|False) -> Void :
-  print-string("VAR-UNIT-ERROR\n")
   match(name) :
     (name:String) : fatal("Variable %_ has not been initialized." % [name])
     (name:False) : fatal("Variable has not been initialized.")
@@ -1615,7 +1610,7 @@ lostanza defn marking-stack-full (heap:ptr<Heap>) -> long :
   lostanza defn tag-ptr-ref (r:ptr<long>) -> long :
     return (r as long)
   lostanza defn untag-ref-marker (r:long) -> long :
-    return r
+    return (r as int) as long
 
 ;Mark the object at the given heap pointer.
 ;On marking stack overflow the depth-first object traversal is pruned, and
@@ -2983,7 +2978,7 @@ val COROUTINE-OPEN = 3
 
 #else :
 
-  lostanza val BASE-TAG-BIT:long = 48L
+  lostanza val BASE-TAG-BIT:long = 46L
   lostanza val REF-TAG-BIT:long = 0L
   lostanza val INT-TAG-BIT:long = 0L
   lostanza val MARKER-TAG-BIT:long = 1L
@@ -4363,6 +4358,9 @@ lostanza defn object-type-id (x:ref<?>) -> int :
   ;   return 0
   else :
     return DOUBLE-TYPE
+
+public lostanza defn object-type-code (x:ref<?>) -> ref<Int> :
+  return new Int{object-type-id(x)}
 
 public lostanza defn object-type (x:ref<?>) -> ref<String> :
   val chars = class-name(object-type-id(x))
