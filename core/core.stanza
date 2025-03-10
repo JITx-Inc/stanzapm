@@ -310,19 +310,15 @@ defn arity-message (arity:Int) :
   "Function cannot be called with %_ arguments." % [arity]
 
 protected defn no-method-error (multi:String, args:Tuple) :
-  print-string("NO-METHOD-ERROR\n")
   fatal("Multi %_ has no appropriate method for arguments of type (%,)." % [multi, seq(object-type,args)])
 
 protected defn amb-method-error (multi:String, args:Tuple) :
-  print-string("AMB-METHOD-ERROR\n")
   fatal("Multi %_ has multiple appropriate methods for arguments of type (%,)." % [multi, seq(object-type,args)])
 
 protected defn no-branch-error (args:Tuple) :
-  print-string("NO-BRANCH-ERROR\n")
   fatal("No appropriate branch for arguments of type (%,)." % [seq(object-type, args)])
 
 protected defn amb-branch-error (args:Tuple) :
-  print-string("AMB-BRANCH-ERROR\n")
   fatal("Multiple appropriate branches for arguments of type (%,)." % [seq(object-type, args)])
 
 protected lostanza defn tuple-length-error (actual-len:long, expected-len:long) -> ref<Void> :
@@ -331,7 +327,6 @@ defn tuple-length-message (actual-len:Int, expected-len:Int) :
   "Cannot destructure tuple of length %_ into %_ items." % [actual-len, expected-len]
 
 protected defn variable-uninitialized-error (name:String|False) -> Void :
-  print-string("VAR-UNIT-ERROR\n")
   match(name) :
     (name:String) : fatal("Variable %_ has not been initialized." % [name])
     (name:False) : fatal("Variable has not been initialized.")
@@ -2482,7 +2477,7 @@ lostanza defn evacuate-nursery (vms:ptr<VMState>) -> ref<False> :
   ;Use heap.top as old objects allocation top
   vms.heap.top = vms.heap.old-objects-end
   ;Copy remembered references from old objects.
-  ;TODO: impement and use iterate-marked-once here to avoid clearing remembered set after evacuation.
+  ;TODO: implement and use iterate-marked-once here to avoid clearing remembered set after evacuation.
   iterate-marked(vms.heap.start, vms.heap.old-objects-end, addr(copy-object), vms)
   ;Copy roots
   iterate-roots(addr(copy-object), vms)
@@ -2830,7 +2825,7 @@ lostanza defn scan-liveness-trackers (vms:ptr<VMState>) -> ref<False> :
       ;no longer refers to a live Unique object. We can assume that
       ;value currently holds a pointer into the heap otherwise it
       ;wouldn't be in the heap.liveness-trackers list.
-      val value-obj = tracker.value as ptr<?>
+      val value-obj = untag-ref-ptr(tracker.value)
       if test-mark(value-obj, bitset-base) == 0 :
         ;The Unique is no longer live so replace the value with
         ;false-marker.
@@ -2882,7 +2877,13 @@ public lostanza deftype ObjectLayout :
   tag: long
   var slots: long ...
 
+public lostanza defn dump-heap () -> ref<False> :
+  val vms:ptr<VMState> = call-prim flush-vm()
+  dump-heap(vms)
+  return false
+
 lostanza defn dump-heap (vms:ptr<VMState>) -> int :
+  call-c clib/printf("HEAP TOP %p LIMIT %p START %p OLD-OBJECTS-END %p SIZE %ld\n", vms.heap.top vms.heap.limit vms.heap.start vms.heap.old-objects-end vms.heap.size)
   call-c clib/printf("Heap[%p to %p]:\n", vms.heap.start, vms.heap.old-objects-end)
   dump-heap(vms.heap.start, vms.heap.old-objects-end, vms)
   val nursery = nursery-start(addr(vms.heap))
@@ -3135,7 +3136,7 @@ public lostanza defn modulo (a:ref<Byte>, b:ref<Byte>) -> ref<Byte> :
     return new Int{a.value - b.value}
 
   public lostanza defn times (a:ref<Int>, b:ref<Int>) -> ref<Int> :
-    return new Int{a.value + b.value}
+    return new Int{a.value * b.value}
 
   public lostanza defn divide (a:ref<Int>, b:ref<Int>) -> ref<Int> :
     ensure-divide-non-zero(b)
@@ -4896,8 +4897,7 @@ public lostanza defn print-bits (x:ref<?>) -> ref<False> :
 
 public lostanza defn print-string (x:ref<String>) -> ref<False> :
   val y = 1 + 2 + 3 + 4 + 5
-  call-c clib/printf("STR %llx %llx %llx %s\n", x, addr!(x.length), addr!(x.chars), addr!(x.chars))
-  ; call-c clib/printf("STR %s\n", addr!(x.chars))
+  call-c clib/printf("STR %s\n", addr!(x.chars))
   return false
 
 public lostanza defn print-char (x:ref<Char>) -> ref<False> :
@@ -8605,7 +8605,6 @@ public defn Range (start:Int, end:Int|False, step:Int, inclusive?:True|False) :
             div?(safe-add(safe-minus(end, start), step), step)
       (end:False, inc) :
          false
-
    match(length) :
       (length:Int) :
          new Range & Lengthable :
@@ -11568,5 +11567,3 @@ public lostanza defn to-radians (degrees:ref<Double>) -> ref<Double> :
 public lostanza defn to-degrees (radians:ref<Double>) -> ref<Double> :
    val pi = 3.141592653589793
    return new Double{radians.value * 180.0 / pi}
-
-

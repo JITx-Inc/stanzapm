@@ -565,10 +565,10 @@ defn gen (os:OutputStream, ins:Ins, backend:Backend) :
       val comm = match(op) :
          (op:SetBitOp) : "bts"
          (op:ClearBitOp) : "btr"
-      match(y, z) :
-         (y, z:Reg) :
+      match(y) :
+         (y:IntImm) :
             #println(os, "   %_q %_, %_" % [comm, #imm(t,y), #imm(t,z)])
-         (y, z) :
+         (y) :
             #println(os, "   %_q %_, (%_)" % [comm, #imm(t,y), #imm(t,z)])
 
    defn #shf (t:ASMType, x:Loc, y:Imm, op:Op, z:Imm) :

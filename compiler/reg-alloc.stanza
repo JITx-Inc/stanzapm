@@ -2547,7 +2547,7 @@ defn assemble (emitter:CodeEmitter,
   ;=========================
   ;==== Special Offsets ====
   ;=========================
-  val stack-offset-counter = Counter(8) ; -1
+  val stack-offset-counter = Counter(8)
   val size-offset = next(stack-offset-counter, 8)
   val frames-offset = next(stack-offset-counter, 8)
   val sp-offset = next(stack-offset-counter, 8)
