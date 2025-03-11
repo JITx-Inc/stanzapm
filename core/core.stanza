@@ -2335,10 +2335,7 @@ lostanza defn forwarding-pointer? (header-word:long) -> long :
 ;resolve or copy the referenced object.
 lostanza defn copy-object (ref:ptr<long>, vms:ptr<VMState>) -> ref<False> :
   ;Retrieve the value at the given heap pointer and preemptively remove the tag bit.
-  #if-defined(BOOTSTRAP) :
-    val v = [ref] - 1L
-  #else :
-    val v = [ref]
+  val v = [ref]
   ;Is this a reference to a Stanza heap object?
   if tagbits(v) == PTR-TAGBITS() :
     ;Cast the bits to an object pointer.
@@ -4350,7 +4347,7 @@ lostanza defn object-type-id (x:ref<?>) -> int :
       call-c clib/printf("Illegal tag bits %llx\n", tagbits)
       fatal("Illegal tag bits\n")
       return 0
-    else :
+    #else :
       return DOUBLE-TYPE
 
 public lostanza defn object-type (x:ref<?>) -> ref<String> :
@@ -5896,7 +5893,7 @@ public defn StringBuffer (n:Int) -> StringBuffer :
          val n = length(xs)
          ensure-capacity(len + n)
          for (x in xs, i in 0 to n) do :
-             buffer[len + i] = x
+            buffer[len + i] = x
          len = len + n
 
       defmethod add-all (this, xs:String) :
@@ -5932,7 +5929,14 @@ public defn StringBuffer (n:Int) -> StringBuffer :
          len
 
       defmethod to-string (this) :
-         buffer[0 to len] as String
+         ; print-string("F")
+         ; print-int(len)
+         ; for i in 0 to len do :
+         ;   ; print-string(to-string(buffer[i]))
+         ;   print-char(buffer[i])
+         val res = buffer[0 to len] as String
+         ; print-string("G")
+         res
 
 public defn StringBuffer () :
    StringBuffer(32)
