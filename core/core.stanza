@@ -634,7 +634,6 @@ protected lostanza defn stack-trace-record (frame:ptr<StackFrame>, trace-table:p
 
 protected lostanza defn realloc (p:ptr<?>, size*:long) -> ptr<?> :
   val p* = call-c clib/realloc(p, size*)
-  ; val p* = call-c clib/stz_realloc(p, size*)
   if p* == null : fatal!("Failed to realloc")
   return p*
 
@@ -648,14 +647,12 @@ lostanza defn LSLongVector (capacity:int) -> ptr<LSLongVector> :
   v.capacity = capacity
   v.length = 0
   v.items = call-c clib/stz_malloc(capacity * sizeof(long))
-  ; call-c clib/printf("LSLV %d %llx %d %d %llx\n", capacity, v, v.capacity, v.length, v.items)
   return v
 
 lostanza defn LSLongVector () -> ptr<LSLongVector> :
   return LSLongVector(8)
 
 lostanza defn ensure-capacity (v:ptr<LSLongVector>, new-capacity:int) -> int :
-  ; call-c clib/printf("ENSURE CAPACITY LSLV %d %llx\n", new-capacity, v)
   if v.capacity < new-capacity :
     var c:int = v.capacity
     while c < new-capacity : c = c << 1
@@ -762,7 +759,6 @@ lostanza val INTERNED-CONST-TAG : int = 13
 lostanza var initialized-symbol-table? : long = 0L
 lostanza var consts-top : long = 4L
 lostanza var num-loaded-consts : long = 0L
-
 
 protected lostanza defn initialize-constants () -> ref<False> :
   ;Initialize read pointer to beginning of the constant table
@@ -2339,7 +2335,10 @@ lostanza defn forwarding-pointer? (header-word:long) -> long :
 ;resolve or copy the referenced object.
 lostanza defn copy-object (ref:ptr<long>, vms:ptr<VMState>) -> ref<False> :
   ;Retrieve the value at the given heap pointer and preemptively remove the tag bit.
-  val v = [ref]
+  #if-defined(BOOTSTRAP) :
+    val v = [ref] - 1L
+  #else :
+    val v = [ref]
   ;Is this a reference to a Stanza heap object?
   if tagbits(v) == PTR-TAGBITS() :
     ;Cast the bits to an object pointer.
@@ -2931,7 +2930,6 @@ lostanza defn dump-heap (pstart:ptr<long>, pend:ptr<long>, vms:ptr<VMState>) -> 
 lostanza defn dump-stack (stackref:long, vms:ptr<VMState>) -> int :
   val stk:ptr<Stack> = untag(stackref)
   val f-end = stk.stack-pointer
-  ; call-c clib/printf("Stack %p (last frame %p):\n", stackref, f-end)
   call-c clib/printf("Stack %p (last frame %p) frames %p:\n", stackref, f-end, stk.frames)
   if stk.frames != null :
     labels :
@@ -2999,7 +2997,6 @@ val COROUTINE-OPEN = 3
   lostanza val CHAR-TAG-BITS:long = 1L << CHAR-TAG-BIT
   lostanza val FLOAT-TAG-BITS:long = 1L << FLOAT-TAG-BIT
   lostanza val DOUBLE-TAG-BITS-MIN:long = 1L << DOUBLE-TAG-BIT
-
 
 lostanza val FALSE-TYPE:int = 0
 lostanza val TRUE-TYPE:int = 1
@@ -3956,8 +3953,6 @@ public defn dynamic-wind<?T> (in:False|(() -> ?),
                               out:False|(() -> ?)) -> T :
   dynamic-wind(body, DyCtxtFrame(in, out))
 
-var print? = false
-
 ;Run the given body with the equipped finally block.
 public defn with-finally<?T> (body: () -> ?T, finally: () -> ?) -> T :
   dynamic-wind(body, DyCtxtFinallyFrame(finally))
@@ -4032,18 +4027,10 @@ protected lostanza var current-coroutine:ref<RawCoroutine>
 lostanza var stepping-coroutine:ref<RawCoroutine|False> = false
 lostanza var COROUTINE-COUNTER:long
 
-lostanza defn print-progress (x:ref<Int>) -> ref<False> :
-  val vms:ptr<VMState> = call-prim flush-vm()
-  val current-stack = vms.heap.current-stack as ref<Stack>
-  call-c clib/printf("CURRENT-STACK: %llx SIZE %d FRAMES %llx\n", current-stack, current-stack.size, current-stack.frames)
-  call-c clib/printf("%d\n", x.value)
-  return false
-
 lostanza defn initialize-coroutines () -> ref<False> :
   val vms:ptr<VMState> = call-prim flush-vm()
   val current-stack = vms.heap.current-stack as ref<Stack>
   val crsp = call-prim crsp() as long
-  val state = DyCtxtState()
   current-coroutine = new RawCoroutine{
                         0L,
                         current-stack,
@@ -4358,12 +4345,13 @@ lostanza defn object-type-id (x:ref<?>) -> int :
   else if tagbits == REF-TAG-BITS :
     val p = untag-ref-ptr(ref)
     return [p] as int
-  ; else :
-  ;   call-c clib/printf("Illegal tag bits %llx\n", tagbits)
-  ;   fatal("Illegal tag bits\n")
-  ;   return 0
   else :
-    return DOUBLE-TYPE
+    #if-defined(BOOTSTRAP) :
+      call-c clib/printf("Illegal tag bits %llx\n", tagbits)
+      fatal("Illegal tag bits\n")
+      return 0
+    else :
+      return DOUBLE-TYPE
 
 public lostanza defn object-type (x:ref<?>) -> ref<String> :
   val chars = class-name(object-type-id(x))
@@ -4416,7 +4404,7 @@ initialize-gc-notifiers()
 initialize-gc-statistics()
 initialize-liveness-handlers()
 initialize-symbol-table()
-; initialize-dominator-tree()
+initialize-dominator-tree()
 initialize-profiler()
 
 ;================================================================================
@@ -5907,16 +5895,8 @@ public defn StringBuffer (n:Int) -> StringBuffer :
       defmethod add-all (this, xs:Seqable<Char> & Lengthable) :
          val n = length(xs)
          ensure-capacity(len + n)
-         ; for (x in xs, i in 0 to n) do :
-         ;    print-string("D")
-         ;    buffer[len + i] = x
-         val ss = to-seq(xs)
-         ; print-int(len)
-         let loop (i:Int = 0) :
-           if not empty?(ss) and i < n :
-             val c = next(ss)
-             buffer[len + i] = c
-             loop(i + 1)
+         for (x in xs, i in 0 to n) do :
+             buffer[len + i] = x
          len = len + n
 
       defmethod add-all (this, xs:String) :
@@ -5952,14 +5932,7 @@ public defn StringBuffer (n:Int) -> StringBuffer :
          len
 
       defmethod to-string (this) :
-         ; print-string("F")
-         ; print-int(len)
-         ; for i in 0 to len do :
-         ;   ; print-string(to-string(buffer[i]))
-         ;   print-char(buffer[i])
-         val res = buffer[0 to len] as String
-         ; print-string("G")
-         res
+         buffer[0 to len] as String
 
 public defn StringBuffer () :
    StringBuffer(32)
@@ -8305,14 +8278,12 @@ lostanza defn bits-to-long (s:ref<String>, start:int, radix:int, bits:int) -> re
 ;======================= Limits =============================
 ;============================================================
 
-
 public val BYTE-MAX = 255Y
 public val BYTE-MIN = 0Y
 public lostanza val INT-MAX:ref<Int> = new Int{(1 << 31) - 1}
 public lostanza val INT-MIN:ref<Int> = new Int{1 << 31}
 public lostanza val LONG-MAX:ref<Long> = new Long{(1L << 63L) - 1L}
 public lostanza val LONG-MIN:ref<Long> = new Long{1L << 63L}
-
 
 public val FLOAT-MAX = bits-as-float(0x7F7FFFFF)
 public val FLOAT-MIN-NORMAL = bits-as-float(0x00800000)
@@ -8327,7 +8298,6 @@ public val FLOAT-POSITIVE-INFINITY = bits-as-float(0x7F800000)
 ; public val DOUBLE-NAN = bits-as-double(0x7ff8000000000000L)
 ; public val DOUBLE-POSITIVE-INFINITY = bits-as-double(0x7ff0000000000000L)
 ; public val DOUBLE-NEGATIVE-INFINITY = bits-as-double(0xfff0000000000000L)
-
 
 ;============================================================
 ;==================== Arithmetic ============================
@@ -8456,7 +8426,6 @@ public defn product (xs: Seqable<Int>) -> Int : reduce(times, 1, xs)
 public defn product (xs: Seqable<Long>) -> Long : reduce(times, 1L, xs)
 public defn product (xs: Seqable<Float>) -> Float : reduce(times, 1.0f, xs)
 public defn product (xs: Seqable<Double>) -> Double : reduce(times, 1.0, xs)
-
 
 ;============================================================
 ;====================== Maybe ===============================
@@ -8814,7 +8783,6 @@ defmethod do (f: Int -> ?, r:SimpleRange) :
     if i < end :
       f(i)
       loop(i + 1)
-
 
 ;============================================================
 ;==================== KeyValue Pairs ========================
@@ -10141,7 +10109,6 @@ public defn fork-on-seq<?T,?S> (xs:Seqable<?T>, fs:Seqable<(Seq<T> -> ?S)>) -> T
    ;Return results
    to-tuple(seq(value!, results))
 
-
 ;============================================================
 ;=============== Commandline Arguments ======================
 ;============================================================
@@ -10222,10 +10189,7 @@ public lostanza defn next-int (r:ref<Random>) -> ref<Int> :
 public lostanza defn next-signed-int (r:ref<Random>) -> ref<Int> :
   return new Int{next-bits(r, 32)}
 
-print? = true
 val LIMIT-STR = String("limit")
-print? = false
-
 public lostanza defn next-int (r:ref<Random>, n0:ref<Int>) -> ref<Int> :
   ensure-positive(LIMIT-STR, n0)
 
@@ -10312,7 +10276,6 @@ public lostanza defn next-double (rand:ref<Random>) -> ref<Double> :
   val den = (1L << 53L) as double
   return new Double{num as double / den}
 
-
 val RANDOM = Random(current-time-us())
 public defn current-random () : RANDOM
 public defn srand (n:Long) : set-state(RANDOM, n)
@@ -10322,7 +10285,6 @@ public defn rand-float () : next-float(RANDOM)
 public defn rand-double () : next-double(RANDOM)
 public defn rand (n:Int) : next-int(RANDOM, n)
 public defn rand (r:Range) : next-int(RANDOM, r)
-
 
 ;============================================================
 ;====================== Permutations ========================
@@ -10389,7 +10351,6 @@ public val CURRENT-PLATFORM:Platform =
         Linux
       #else :
         fatal("Unreachable")
-
 
 ;============================================================
 ;=================== Process Library ========================
@@ -10862,7 +10823,6 @@ public defn call-system (args:Tuple<String>) -> Int :
     fatal("Arguments must have minimum length 1. Program name is expected to be first argument.")
   call-system(args[0], args, false, false)
 
-
 ;============================================================
 ;=========== Call System and Retrieve Output ================
 ;============================================================
@@ -10924,7 +10884,6 @@ public lostanza defn replace-current-process (path:ref<String>,
     result = call-c clib/execv(addr!(path.chars), argvs)
   ;Issue error
   return throw(SystemCallException(linux-error-msg()))
-
 
 ;============================================================
 ;================== Shell Escaping ==========================
