@@ -7517,83 +7517,55 @@ public defn lazy-qsort<?T,?S> (key:T -> ?S&Comparable<S>, coll:Seqable<?T>) :
 ;======================= Arrays =============================
 ;============================================================
 
-public deftype Array<T> <: IndexedCollection<T> & Unique
+public deftype Arrayable<T> <: IndexedCollection<T> & Unique
 
 ;                     Implementation
 ;                     ==============
 
-lostanza deftype RawArray<T> <: Array<T> :
+public lostanza deftype Array<T> <: Arrayable<T> :
    length: long
    var items: ref<?> ...
 
-lostanza defn RawArray<T> (n:ref<Int>, x:ref<?>) -> ref<RawArray<T>> :
-   val l = n.value
-   val a = new RawArray<T>{l}
-   for (var i:long = 0, i < l, i = i + 1) :
-      a.items[i] = x
-   return a
+lostanza defn Array*<T> (n:ref<Int>, x:ref<?>) -> ref<Array<T>> :
+  val l = n.value
+  val a = new Array<T>{l}
+  for (var i:long = 0, i < l, i = i + 1) :
+    a.items[i] = x
+  return a
 
-lostanza defmethod get<?T> (a:ref<RawArray<?T>>, i:ref<Int>) -> ref<T> :
+public defn Array<T> (n:Int, x:T) -> Array<T> :
+  core/ensure-non-negative("length", n)
+  Array*<T>(n, x)
+
+public defn Array<T> (n:Int) -> Array<T> :
+  Array*<T>(n, sentinel)
+
+lostanza defmethod get<?T> (a:ref<Array<?T>>, i:ref<Int>) -> ref<T> :
+  #if-not-defined(OPTIMIZE) :
+    core/ensure-index-in-bounds(a, i)
   return a.items[i.value]
 
-lostanza defmethod set<?T> (a:ref<RawArray<?T>>, i:ref<Int>, v:ref<?T>) -> ref<False> :
+lostanza defmethod set<?T> (a:ref<Array<?T>>, i:ref<Int>, v:ref<?T>) -> ref<False> :
+  #if-not-defined(OPTIMIZE) :
+    core/ensure-index-in-bounds(a, i)
   a.items[i.value] = v
   return false
 
-lostanza defmethod set-all<?T> (xs:ref<RawArray<?T>>, r:ref<Range>, v:ref<?T>) -> ref<False> :
-   val range = range-bound(xs, r) as ref<Tuple<Int>>
-   val b = range.items[0].value
-   val e = range.items[1].value
-   for (var i:long = b, i < e, i = i + 1) :
-      xs.items[i] = v
-   return false
+lostanza defmethod set-all<?T> (xs:ref<Array<?T>>, r:ref<Range>, v:ref<?T>) -> ref<False> :
+  #if-not-defined(OPTIMIZE) :
+    core/ensure-index-range(xs, r)
+  val range = core/range-bound(xs, r) as ref<Tuple<Int>>
+  val b = range.items[0].value
+  val e = range.items[1].value
+  for (var i:long = b, i < e, i = i + 1) :
+    xs.items[i] = v
+  return false
 
-lostanza defmethod length (a:ref<RawArray>) -> ref<Int> :
-   return new Int{a.length as int}
+lostanza defmethod length (a:ref<Array>) -> ref<Int> :
+  return new Int{a.length as int}
 
-defmethod print (o:OutputStream, a:RawArray) -> False :
-   print(o, "[%@]" % [a])
-
-;                     Wrapping
-;                     ========
-
-#if-defined(OPTIMIZE) :
-
-   public defn Array<T> (n:Int) -> RawArray<T> :
-      RawArray<T>(n, sentinel)
-
-   public defn Array<T> (n:Int, x:T) -> RawArray<T> :
-      RawArray<T>(n, x)
-
-#else :
-
-   deftype WrappedArray<T> <: Array<T>
-
-   public defn Array<T> (n:Int) -> Array<T> :
-      ensure-non-negative("length", n)
-      Array<T>(RawArray<T>(n, sentinel))
-
-   public defn Array<T> (n:Int, x:T) -> Array<T> :
-      ensure-non-negative("length", n)
-      Array<T>(RawArray<T>(n, x))
-
-   defn Array<T> (a:RawArray) -> Array<T> :
-      new WrappedArray<T> :
-         defmethod get (this, i:Int) :
-            ensure-index-in-bounds(a, i)
-            match(a[i]) :
-               (v:Sentinel) : fatal("Index (%_) is uninitialized." % [i])
-               (v) : v
-         defmethod set (this, i:Int, v:T) :
-            ensure-index-in-bounds(a, i)
-            a[i] = v
-         defmethod set-all (this, r:Range, v:T) :
-            ensure-index-range(a, r)
-            set-all(a, r, v)
-         defmethod length (this) :
-            length(a)
-         defmethod print (o:OutputStream, this) :
-            print(o, a)
+defmethod print (o:OutputStream, a:Array) -> False :
+  print(o, "[%@]" % [a])
 
 public defn map<R,?T> (xs:Array<?T>, f: T -> R) -> Array<R> :
   map<R>(f, xs)
@@ -7616,7 +7588,7 @@ public defn map<R,?T> (f: T -> R, xs:Array<?T>) -> Array<R> :
 
   ;                     Declaration
   ;                     ===========
-  public lostanza deftype PrimArray <: Array<Prim> :
+  public lostanza deftype PrimArray <: Arrayable<Prim> :
     length: long
     var data: prim ...
 
@@ -7688,7 +7660,7 @@ public defn map<R,?T> (f: T -> R, xs:Array<?T>) -> Array<R> :
 ;==================== CharArrays ============================
 ;============================================================
 
-public lostanza deftype CharArray <: Array<Char> :
+public lostanza deftype CharArray <: Arrayable<Char> :
   length: long
   var chars: byte ...
 
@@ -7754,7 +7726,7 @@ defmethod block-copy<?T> (n:Int, dst:IndexedCollection<?T>, di:Int, src:IndexedC
    for i in 0 to n do :
       dst[di + i] = src[si + i]
 
-lostanza defmethod block-copy (ref-n:ref<Int>, dst:ref<RawArray>, ref-di:ref<Int>, src:ref<RawArray>, ref-si:ref<Int>) -> ref<False> :
+lostanza defmethod block-copy (ref-n:ref<Int>, dst:ref<Array>, ref-di:ref<Int>, src:ref<Array>, ref-si:ref<Int>) -> ref<False> :
   ensure-block-copy-preconditions(ref-n, dst, ref-di, src, ref-si)
   val dst-ptr = addr!(dst.items)
   val src-ptr = addr!(src.items)
