@@ -53,6 +53,17 @@ defn bsearch<?T,?S> (less?: (T, S) -> True|False,
       if xs[i + m] < v : loop(i + m + 1, n - m - 1)
       else : loop(i, m)
 
+defn bsearch (less?: (Int, Int) -> True|False, xs:IntArray, n:Int, v:Int) -> Int :
+  ;All items with index less than i are known to be smaller than v.
+  ;All items with index (i + n) or greater are known to be greater or equal to v.
+  let loop (i:Int = 0, n:Int = n) :
+    if n == 0 :
+      i
+    else :
+      val m = n / 2
+      if xs[i + m] < v : loop(i + m + 1, n - m - 1)
+      else : loop(i, m)
+
 ;============================================================
 ;===================== Vectors ==============================
 ;============================================================
@@ -60,7 +71,28 @@ defn bsearch<?T,?S> (less?: (T, S) -> True|False,
 ;                     Interface
 ;                     =========
 
-public deftype Vector<T> <: IndexedCollection<T>
+public lostanza deftype Vector<T> <: IndexedCollection<T> :
+  var size: long
+  var array: ref<Array<T>>
+
+public lostanza defn Vector<T> (cap:ref<Int>) -> ref<Vector<T>> :
+  core/ensure-non-negative(String("capacity"), cap)
+  return new Vector<T>{0L, Array<T>(cap)}
+
+lostanza defn size (v:ref<Vector>) -> ref<Int> :
+  return new Int{v.size as int}
+
+lostanza defn set-size (v:ref<Vector>, s:ref<Int>) -> ref<False> :
+  v.size = s.value as long
+  return false
+
+lostanza defn array<?T> (v:ref<Vector<?T>>) -> ref<Array<T>> :
+  return v.array
+
+lostanza defn set-array (v:ref<Vector>, a:ref<Array>) -> ref<False> :
+  v.array = a
+  return false
+
 public defmulti add<?T> (v:Vector<?T>, value:T) -> False
 public defmulti add-all<?T> (v:Vector<?T>, vs:Seqable<T>) -> False
 public defmulti clear (v:Vector) -> False
@@ -81,6 +113,146 @@ public defmulti set-length<?T> (v:Vector<?T>, length:Int, x:T) -> False
 ;                   Implementation
 ;                   ==============
 
+defn set-capacity<?T> (v:Vector<?T>, c:Int) :
+  val new-array = Array<T>(c)
+  new-array[0 to size(v)] = array(v)
+  set-array(v, new-array)
+
+defn ensure-capacity<?T> (v:Vector<?T>, c:Int) :
+  val cur-c = length(array(v))
+  set-capacity(v, max(c, 2 * cur-c)) when c > cur-c
+
+defmethod get<?T> (v:Vector<?T>, i:Int) :
+  core/ensure-index-in-bounds(v, i)
+  array(v)[i]
+
+defmethod set<?T> (v:Vector<?T>, i:Int, value:T) :
+  if i == size(v) :
+    add(v, value)
+  else :
+    core/ensure-index-in-bounds(v, i)
+    array(v)[i] = value
+
+defmethod set-all<?T> (v:Vector<?T>, r:Range, x:T) :
+  core/ensure-index-range(v, r)
+  set-all(array(v), r, x)         
+
+defmethod length (v:Vector) :
+  size(v)
+
+defmethod trim<?T> (v:Vector<?T>) :
+  set-capacity(v, size(v))
+
+defmethod set-length<?T> (v:Vector<?T>, len:Int, value:T) :
+  if len > size(v) : lengthen(v, len, value)
+  else : shorten(v, len)
+
+defmethod shorten<?T> (v:Vector<?T>, new-size:Int) :
+  #if-not-defined(OPTIMIZE) :
+    core/ensure-non-negative("size", new-size)
+    if new-size > size(v) :
+      fatal("Given size (%_) is larger than current size (%_)." % [new-size, size(v)])
+  set-size(v, new-size)
+
+defmethod lengthen<?T> (v:Vector<?T>, new-size:Int, x:T) :
+  #if-not-defined(OPTIMIZE) :
+    if new-size < size(v) :
+      fatal("Given size (%_) is smaller than current size (%_)." % [new-size, size(v)])
+  ensure-capacity(v, new-size)
+  set-all(array(v), size(v) to new-size, x)
+  set-size(v, new-size)
+
+defmethod add<?T> (v:Vector<?T>, value:T) :
+  val sz = size(v)
+  ensure-capacity(v, sz + 1)
+  array(v)[sz] = value
+  set-size(v, sz + 1)
+
+defmethod add-all<?T> (v:Vector<?T>, vs:Seqable<T>) :
+  match(vs) :
+    (vs:Seqable<T> & Lengthable) :
+      val n = length(vs)
+      ensure-capacity(v, size(v) + n)
+      array(v)[size(v) to (size(v) + n)] = vs
+      set-size(v, size(v) + n)
+    (vs) :
+      do(add{v, _}, vs)
+
+defmethod pop<?T> (v:Vector<?T>) :
+  #if-not-defined(OPTIMIZE) :
+    fatal("Empty Vector") when size(v) == 0
+  set-size(v, size(v) - 1)
+  array(v)[size(v)]
+
+defmethod peek<?T> (v:Vector<?T>) :
+  #if-not-defined(OPTIMIZE) :
+    fatal("Empty Vector") when size(v) == 0
+  array(v)[size(v) - 1]
+
+defmethod clear (v:Vector) :
+  set-size(v, 0)
+
+defmethod clear<?T> (v:Vector<?T>, n:Int, x0:T) :
+  if length(array(v)) < n :
+    val cap = max(n, 2 * length(array(v)))
+    set-array(v, Array<T>(cap, x0))
+    set-size(v, n)
+  else :
+    set-all(array(v), 0 to n, x0)
+    set-size(v, n)
+
+defmethod remove-when<?T> (f: T -> True|False, v:Vector<?T>) :
+  for x in v update :
+    if f(x) : None()
+    else : One(x)
+
+defmethod remove<?T> (v:Vector<?T>, i:Int) :
+  core/ensure-index-in-bounds(v, i)
+  val a = array(v)
+  val x = a[i]
+  for i in i to (size(v) - 1) do :
+    a[i] = a[i + 1]
+  set-size(v, size(v) - 1)
+  x
+
+defmethod remove<?T> (v:Vector<?T>, r:Range) :
+  core/ensure-index-range(v, r)
+  val [s,e] = core/range-bound(v, r)
+  val n = e - s
+  val a = array(v)
+  val sz = size(v)
+  if n > 0 :
+    for i in s to (sz - n) do :
+      a[i] = a[i + n]
+    set-size(v, sz - n)
+
+defmethod remove-item<?T> (v:Vector<?T&Equalable>, x:T&Equalable) :
+  match(index-of(v, x)) :
+    (i:Int) : (remove(v, i), true)
+    (i:False) : false
+
+defmethod update<?T> (f: T -> Maybe<T>, v:Vector<?T>) :
+  val a = array(v)
+  let loop (dst:Int = 0, src:Int = 0) :
+    if src < size(v) :
+      match(f(a[src])) :
+        (x:One<T>) :
+          a[dst] = value(x)
+          loop(dst + 1, src + 1)
+        (x:None) :
+          loop(dst, src + 1)
+    else :
+      set-size(v, dst)
+
+defmethod do<?T> (f: T -> ?, v:Vector<?T>) :
+ val n = size(v)
+ val a = array(v)
+ let loop (i:Int = 0) :
+   if i < n :
+     f(a[i])
+     loop(i + 1)
+
+;<DOC>
 public defn Vector<T> (cap:Int) -> Vector<T> :
    core/ensure-non-negative("capacity", cap)
    var array = Array<T>(cap)
@@ -220,6 +392,7 @@ public defn Vector<T> (cap:Int) -> Vector<T> :
             if i < n :
                f(array[i])
                loop(i + 1)
+;<DOC>
 
 public defn update<?T> (v:Vector<?T>, f: T -> Maybe<T>) -> False :
   update(f,v)
@@ -438,7 +611,7 @@ public defn HashTable<K,V> (cap0:Int
     limit = c * 3 / 4
     mask = cap - 1
     slots = Array<Sentinel|TableItem<K,V>|Array<TableItem<K,V>>>(cap, sentinel())
-    sizes = Array<Int>(cap, 0)
+    sizes = IntArray(cap, 0)
     size = 0
 
   defn clear () :
@@ -861,7 +1034,7 @@ public defn IntTable<V> (cap0:Int
     limit = c * 3 / 4
     mask = cap - 1
     slots = Array<Sentinel|IntItem<V>|Array<IntItem<V>>>(cap, sentinel())
-    sizes = Array<Int>(cap, 0)
+    sizes = IntArray(cap, 0)
     size = 0
 
   defn clear () :
@@ -1280,7 +1453,7 @@ public defn HashSet<K> (cap0:Int
     limit = c * 3 / 4
     mask = cap - 1
     slots = Array<Sentinel|SetItem<K>|Array<SetItem<K>>>(cap, sentinel())
-    sizes = Array<Int>(cap, 0)
+    sizes = IntArray(cap, 0)
     size = 0
 
   defn clear () :
@@ -1533,8 +1706,8 @@ public defn IntSet (cap0:Int) :
     cap = c
     limit = c * 3 / 4
     mask = cap - 1
-    slots = Array<Sentinel|Int|Array<Int>>(cap, sentinel())
-    sizes = Array<Int>(cap, 0)
+    slots = Array<Sentinel|Int|IntArray>(cap, sentinel())
+    sizes = IntArray(cap, 0)
     size = 0
 
   defn clear () :
@@ -1550,28 +1723,28 @@ public defn IntSet (cap0:Int) :
     h & mask
 
   ;Find number of items whose hash is less than h
-  defn num-before (xs:Array<Int>, n:Int, x:Int) :
+  defn num-before (xs:IntArray, n:Int, x:Int) :
     bsearch(less?, xs, n, x)
 
   ;Look for item with given hash and key starting from i
-  defn* index-of-item (xs:Array<Int>, i:Int, n:Int, y:Int) :
+  defn* index-of-item (xs:IntArray, i:Int, n:Int, y:Int) :
     if i < n :
       val x = xs[i]
       if x == y : i
 
   ;Shift items in xs from i to n right by one element
-  defn* shift-right (xs:Array<Int>, i:Int, n:Int) :
+  defn* shift-right (xs:IntArray, i:Int, n:Int) :
     for j in n to i by -1 do :
       xs[j] = xs[j - 1]
 
   ;Shift items in xs from (i + 1) to n left by one element
-  defn* shift-left (xs:Array<Int>, i:Int, n:Int) :
+  defn* shift-left (xs:IntArray, i:Int, n:Int) :
     for j in i to (n - 1) do :
       xs[j] = xs[j + 1]    
 
   ;Copy to new array with hole in position i
-  defn* copy-with-hole (xs:Array<Int>, i:Int, n:Int) :
-    val xs* = Array<Int>(length(xs) * 2)
+  defn* copy-with-hole (xs:IntArray, i:Int, n:Int) :
+    val xs* = IntArray(length(xs) * 2)
     xs*[0 to i] = xs[0 to i]
     xs*[(i + 1) to (n + 1)] = xs[i to n]
     xs*
@@ -1592,7 +1765,7 @@ public defn IntSet (cap0:Int) :
     do(put, items)
 
   defn create-bucket (slot:Int, x0:Int, x1:Int) :
-    val bucket = Array<Int>(4)
+    val bucket = IntArray(4)
     slots[slot] = bucket
     sizes[slot] = 2
     ;Populate bucket
@@ -1605,7 +1778,7 @@ public defn IntSet (cap0:Int) :
       bucket[0] = x1
       bucket[1] = x0
 
-  defn add-to-bucket (slot:Int, bucket:Array<Int>, i:Int, n:Int, x:Int) :
+  defn add-to-bucket (slot:Int, bucket:IntArray, i:Int, n:Int, x:Int) :
     ;Case 1 of 2: Bucket has space.
     if n + 1 < length(bucket) :
       shift-right(bucket, i, n)
@@ -1641,7 +1814,7 @@ public defn IntSet (cap0:Int) :
           increment-size()
           true
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<Int>) :
+      (s:IntArray) :
         val n = sizes[slot]
         val i = num-before(s, n, x)
         match(index-of-item(s, i, n, x)) :
@@ -1665,7 +1838,7 @@ public defn IntSet (cap0:Int) :
       ;Case 2 of 3: Single item bucket
       (s:Int) : s == x
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<Int>) :
+      (s:IntArray) :
         val n = sizes[slot]
         val i = num-before(s, n, x)
         index-of-item(s, i, n, x) is Int
@@ -1687,7 +1860,7 @@ public defn IntSet (cap0:Int) :
           decrement-size()
           true
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<Int>) :
+      (s:IntArray) :
         val n = sizes[slot]
         val i = num-before(s, n, x)
         match(index-of-item(s, i, n, x)) :
@@ -1709,7 +1882,7 @@ public defn IntSet (cap0:Int) :
         match(slots[idx]) :
           (s:Sentinel) : false
           (s:Int) : yield(s)
-          (s:Array<Int>) : for j in 0 to sizes[idx] do : yield(s[j])
+          (s:IntArray) : for j in 0 to sizes[idx] do : yield(s[j])
 
   ;======================
   ;==== Table Object ====
