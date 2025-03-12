@@ -686,8 +686,8 @@ STANZA_API_FUNC int MAIN_FUNC (int argc, char* argv[]) {
       exit(-1);
     }
   }
-  const stz_long min_heap_size = ROUND_UP_TO_WHOLE_PAGES(max_heap_gigs * 1024 * 1024);
-  const stz_long max_heap_size = ROUND_UP_TO_WHOLE_PAGES(STZ_LONG(8) * 1024 * 1024 * 1024);
+  const stz_long min_heap_size = ROUND_UP_TO_WHOLE_PAGES(STZ_LONG(8) * 1024 * 1024);
+  const stz_long max_heap_size = ROUND_UP_TO_WHOLE_PAGES(max_heap_gigs * 1024 * 1024 * 1024);
   init.heap_start = (stz_byte*)stz_memory_map(min_heap_size, max_heap_size);
   init.heap_max_size = max_heap_size;
   init.heap_size_limit = max_heap_size;
