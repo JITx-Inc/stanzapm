@@ -399,7 +399,7 @@ defn bindings (fields:List<StructField>,
      `updater => updater-name
      `ensure? => choice(not field.ensure.empty?)
      `ensure => field.ensure.value?
-     `ensure-field-initialized => gensym(symbol-join(["ensure-field-" struct-name '-' field.name "-initialized" ]))
+     ; `ensure-field-initialized => gensym(symbol-join(["ensure-field-" struct-name '-' field.name "-initialized" ]))
      `local-name => local-name
      `local-type => local-type
      `arg-name => arg-name
@@ -524,15 +524,15 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
 
       ;Field getter.
       ;If voidable, then checks that the value is set.
-      voidable?{
-        defn ensure-field-initialized (x:type) :
-          ensure-initialized(x, `qualified-name)
-      }{}
+      ; voidable?{
+      ;   defn ensure-field-initialized (x:type) :
+      ;     ensure-initialized(x, `qualified-name)
+      ; }{}
 
       lostanza defmethod name<targs{?name}> (self:ref<Struct<targs{?name}>>) -> ref<type> :
         voidable?{
-          ensure-field-initialized(self.name)
-          return self.name as type
+          ; ensure-field-initialized(self.name)
+          return self.name as ref<type>
         }{
           return self.name
         }
@@ -552,12 +552,12 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
       ;Field updater.
       ;Ensure that value satisfies preconditions.
       updater?{
-        defmethod updater<targs<?name>> (self:Struct<targs<?name>>, local-name:type) :
+        defmethod updater<targs{?name}> (self:Struct<targs{?name}>, local-name:type) :
           ensure?{
             #if-not-defined(OPTIMIZE) :
-              ensure(description, name(self))
+              ensure(description, local-name)
           }{}
-          MainConstructor<targs{name}>(fields{name(self)})
+          MainConstructor<targs{name}>(fields{local-name})
       }{}
 
     }
