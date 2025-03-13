@@ -438,370 +438,362 @@ defmethod same-contents? (a:Table, b:Table) :
 ;====================== HashTables ==========================
 ;============================================================
 
-public deftype HashTable<K,V> <: Table<K,V>
+public defstruct HashTable<K,V> <: Table<K,V> :
+  cap : Int with: (setter => set-cap)
+  limit : Int with: (setter => set-limit, init => cap * 3 / 4)
+  mask : Int with: (setter => set-mask, init => cap - 1)  
+  slots : Array<Sentinel|TableItem<K,V>|Array<TableItem<K,V>>> with: (setter => set-slots, init => Array<Sentinel|TableItem<K,V>|Array<TableItem<K,V>>>(cap, sentinel()))
+  sizes : IntArray with: (setter => set-sizes, init => IntArray(cap, 0))
+  size : Int with: (setter => set-size, init => 0)
+  key-hash : K -> Int
+  key-equal? : (K,K) -> True | False
+  default : K -> V
+  create-on-default: True|False
+with:
+  constructor => #HashTable
 
-public defn HashTable<K,V> (cap0:Int
-                            key-hash: K -> Int
+defn key-hash<?K,?V> (t:HashTable<?K,?V>, k:K) -> Int :
+  key-hash(t)(k)
+
+defn key-equal?<?K,?V> (t:HashTable<?K,?V>, x:K, y:K) -> True|False :
+  key-equal?(t)(x, y)
+
+defn init<?K,?V> (t:HashTable<?K,?V>, c:Int) :
+  set-cap(t, c)
+  set-limit(t, c * 3 / 4)
+  set-mask(t, c - 1)
+  set-slots(t, Array<Sentinel|TableItem<K,V>|Array<TableItem<K,V>>>(c, sentinel()))
+  set-sizes(t, IntArray(c, 0))
+  set-size(t, 0)
+
+defn clear<?K,?V> (t:HashTable<?K,?V>) :
+  set-size(t, 0)
+  set-all(slots(t), 0 to false, sentinel())
+
+public defn HashTable<K,V> (cap0:Int,
+                            key-hash: K -> Int,
                             key-equal?: (K,K) -> True|False
                             default: K -> V,
-                            create-on-default:True|False) :
-  ;=====================
-  ;==== Table State ====
-  ;=====================
-  var cap
-  var limit
-  var mask
-  var slots
-  var sizes
-  var size
+                            create-on-default:True|False) -> HashTable<K,V> :
+  #HashTable<K,V>(next-pow2(max(8, cap0)), key-hash, key-equal?, default, create-on-default)
 
-  defn init (c:Int) :
-    cap = c
-    limit = c * 3 / 4
-    mask = cap - 1
-    slots = Array<Sentinel|TableItem<K,V>|Array<TableItem<K,V>>>(cap, sentinel())
-    sizes = IntArray(cap, 0)
-    size = 0
+;===================
+;==== Utilities ====
+;===================
+defn loc (t:HashTable, h:Int) -> Int :
+  h & mask(t)
 
-  defn clear () :
-    size = 0
-    set-all(slots, 0 to false, sentinel())
+;Matching predicate for TableItem
+defn match?<?K,?V> (t:HashTable<?K,?V>, a:TableItem<K,V>, h:Int, k:K) :
+  hash(a) == h and
+  key-equal?(t, key(a), k)
+defn match?<?K,?V> (t:HashTable<?K,?V>, a:TableItem<K,V>, b:TableItem<K,V>) :
+  match?(t, a, hash(b), key(b))
 
-  init(next-pow2(max(8, cap0)))
+;Find number of items whose hash is less than h
+defn num-before<?K,?V> (t:HashTable<?K,?V>, xs:Array<TableItem<K,V>>, n:Int, h:Int) :
+  bsearch({hash(_) < _}, xs, n, h)
 
-  ;===================
-  ;==== Utilities ====
-  ;===================
-  defn loc (h:Int) :
-    h & mask
+;Look for item with given hash and key starting from i
+defn* index-of-item<?K,?V> (t:HashTable<?K,?V>, xs:Array<TableItem<K,V>>, i:Int, n:Int, h:Int, k:K) :
+  if i < n :
+    val x = xs[i]
+    if hash(x) == h :
+      if key-equal?(t, key(x), k) : i
+      else : index-of-item(t, xs, i + 1, n, h, k)
 
-  ;Matching predicate for TableItem
-  defn match? (a:TableItem<K,V>, h:Int, k:K) :
-    hash(a) == h and
-    key-equal?(key(a), k)
-  defn match? (a:TableItem<K,V>, b:TableItem<K,V>) :
-    match?(a, hash(b), key(b))
+;Shift items in xs from i to n right by one element
+defn* shift-right<?K,?V> (xs:Array<TableItem<?K,?V>>, i:Int, n:Int) :
+  for j in n to i by -1 do :
+    xs[j] = xs[j - 1]
 
-  ;Find number of items whose hash is less than h
-  defn num-before (xs:Array<TableItem<K,V>>, n:Int, h:Int) :
-    bsearch({hash(_) < _}, xs, n, h)
+;Shift items in xs from (i + 1) to n left by one element
+defn* shift-left<?K,?V> (xs:Array<TableItem<?K,?V>>, i:Int, n:Int) :
+  for j in i to (n - 1) do :
+    xs[j] = xs[j + 1]    
 
-  ;Look for item with given hash and key starting from i
-  defn* index-of-item (xs:Array<TableItem<K,V>>, i:Int, n:Int, h:Int, k:K) :
-    if i < n :
-      val x = xs[i]
-      if hash(x) == h :
-        if key-equal?(key(x), k) : i
-        else : index-of-item(xs, i + 1, n, h, k)
+;Copy to new array with hole in position i
+defn* copy-with-hole<?K,?V> (t:HashTable<?K,?V>, xs:Array<TableItem<K,V>>, i:Int, n:Int) :
+  val xs* = Array<TableItem<K,V>>(length(xs) * 2)
+  xs*[0 to i] = xs[0 to i]
+  xs*[(i + 1) to (n + 1)] = xs[i to n]
+  xs*
 
-  ;Shift items in xs from i to n right by one element
-  defn* shift-right (xs:Array<TableItem<K,V>>, i:Int, n:Int) :
-    for j in n to i by -1 do :
-      xs[j] = xs[j - 1]
+;==========================
+;==== Entry Operations ====
+;==========================
+defn increment-size<?K,?V> (t:HashTable<?K,?V>) :
+  set-size(t, size(t) + 1)
+  increase-capacity(t) when size(t) >= limit(t)
 
-  ;Shift items in xs from (i + 1) to n left by one element
-  defn* shift-left (xs:Array<TableItem<K,V>>, i:Int, n:Int) :
-    for j in i to (n - 1) do :
-      xs[j] = xs[j + 1]    
+defn decrement-size<?K,?V> (t:HashTable<?K,?V>) :
+  set-size(t, size(t) - 1)
 
-  ;Copy to new array with hole in position i
-  defn* copy-with-hole (xs:Array<TableItem<K,V>>, i:Int, n:Int) :
-    val xs* = Array<TableItem<K,V>>(length(xs) * 2)
-    xs*[0 to i] = xs[0 to i]
-    xs*[(i + 1) to (n + 1)] = xs[i to n]
-    xs*
+defn increase-capacity<?K,?V> (t:HashTable<?K,?V>) :
+  val items = sequence(t, {_})
+  init(t, cap(t) * 2)
+  do(put{t, _}, items)
 
-  ;==========================
-  ;==== Entry Operations ====
-  ;==========================
-  defn increment-size () :
-    size = size + 1
-    increase-capacity() when size >= limit
-    
-  defn decrement-size () :
-    size = size - 1
+defn create-bucket<?K,?V> (t:HashTable<?K,?V>, slot:Int, x0:TableItem<K,V>, x1:TableItem<K,V>) :
+  val bucket = Array<TableItem<K,V>>(4)
+  slots(t)[slot] = bucket
+  sizes(t)[slot] = 2
+  ;Populate bucket
+  if hash(x0) < hash(x1) :
+    ;Add in front
+    bucket[0] = x0
+    bucket[1] = x1
+  else :
+    ;Add in back
+    bucket[0] = x1
+    bucket[1] = x0
 
-  defn increase-capacity () :
-    val items = sequence({_})
-    init(cap * 2)
-    do(put, items)
+defn add-to-bucket<?K,?V> (t:HashTable<?K,?V>, slot:Int, bucket:Array<TableItem<K,V>>, i:Int, n:Int, x:TableItem<K,V>) :
+  ;Case 1 of 2: Bucket has space.
+  if n + 1 < length(bucket) :
+    shift-right(bucket, i, n)
+    bucket[i] = x
+  ;Case 2 of 2: Bucket is full.
+  else :
+    val bucket* = copy-with-hole(t, bucket, i, n)
+    slots(t)[slot] = bucket*
+    bucket*[i] = x
+  sizes(t)[slot] = n + 1
 
-  defn create-bucket (slot:Int, x0:TableItem<K,V>, x1:TableItem<K,V>) :
-    val bucket = Array<TableItem<K,V>>(4)
-    slots[slot] = bucket
-    sizes[slot] = 2
-    ;Populate bucket
-    if hash(x0) < hash(x1) :
-      ;Add in front
-      bucket[0] = x0
-      bucket[1] = x1
-    else :
-      ;Add in back
-      bucket[0] = x1
-      bucket[1] = x0
+;=======================
+;==== Put Operation ====
+;=======================
+defmethod set<?K,?V> (t:HashTable<?K,?V>, k:K, v:V) :
+  put(t, TableItem<K,V>(key-hash(t, k), k, v))
 
-  defn add-to-bucket (slot:Int, bucket:Array<TableItem<K,V>>, i:Int, n:Int, x:TableItem<K,V>) :
-    ;Case 1 of 2: Bucket has space.
-    if n + 1 < length(bucket) :
-      shift-right(bucket, i, n)
-      bucket[i] = x
-    ;Case 2 of 2: Bucket is full.
-    else :
-      val bucket* = copy-with-hole(bucket, i, n)
-      slots[slot] = bucket*
-      bucket*[i] = x
-    sizes[slot] = n + 1
+defn put<?K,?V> (t:HashTable<?K,?V>, x:TableItem<K,V>) :
+  val slot = loc(t, hash(x))
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      ;New Entry
+      slots(t)[slot] = x
+      increment-size(t)
+    ;Case 2 of 3: Single item bucket
+    (s:TableItem<K,V>) :
+      ;Case 1 of 2: Item matches
+      if match?(t,s,x) :
+        ;Replace Entry
+        slots(t)[slot] = x
+      ;Case 2 of 2: Add Item
+      else :
+        create-bucket(t, slot, s, x)
+        increment-size(t)
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<TableItem<K,V>>) :
+      val n = sizes(t)[slot]
+      val h = hash(x)
+      val i = num-before(t, s, n, h)
+      match(index-of-item(t, s, i, n, h, key(x))) :
+        ;Case 1 of 2: Item exists in bucket
+        (idx:Int) :
+          s[idx] = x
+        ;Case 2 of 2: Add new item to bucket
+        (idx:False) :
+          add-to-bucket(t, slot, s, i, n, x)
+          increment-size(t)
 
-  ;=======================
-  ;==== Put Operation ====
-  ;=======================
-  defn put (x:TableItem<K,V>) :
-    val slot = loc(hash(x))
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
-        ;New Entry
-        slots[slot] = x
-        increment-size()
-      ;Case 2 of 3: Single item bucket
-      (s:TableItem<K,V>) :
-        ;Case 1 of 2: Item matches
-        if match?(s,x) :
-          ;Replace Entry
-          slots[slot] = x
-        ;Case 2 of 2: Add Item
-        else :
-          create-bucket(slot, s, x)
-          increment-size()
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, hash(x))
-        match(index-of-item(s, i, n, hash(x), key(x))) :
-          ;Case 1 of 2: Item exists in bucket
-          (idx:Int) :
-            s[idx] = x
-          ;Case 2 of 2: Add new item to bucket
-          (idx:False) :
-            add-to-bucket(slot, s, i, n, x)
-            increment-size()
+;===========================
+;==== Lookup? Operation ====
+;===========================
+defmethod get?<?K,?V,?D> (t:HashTable<?K,?V>, k:K, default:?D) :
+  val h = key-hash(t, k)
+  val slot = loc(t, h)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      default
+    ;Case 2 of 3: Single item bucket
+    (s:TableItem<K,V>) :
+      ;Case 1 of 2: Item matches
+      if match?(t,s,h,k) : value(s)
+      else : default
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<TableItem<K,V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(t, s, n, h)
+      match(index-of-item(t, s, i, n, h, k)) :
+        (idx:Int) : value(s[idx])
+        (idx:False) : default
 
-  ;===========================
-  ;==== Lookup? Operation ====
-  ;===========================
-  defn lookup?<?D> (k:K, default:?D) :
-    val h = key-hash(k)
-    val slot = loc(h)
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
-        default
-      ;Case 2 of 3: Single item bucket
-      (s:TableItem<K,V>) :
-        ;Case 1 of 2: Item matches
-        if match?(s,h,k) : value(s)
-        else : default
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, h)
-        match(index-of-item(s, i, n, h, k)) :
-          (idx:Int) : value(s[idx])
-          (idx:False) : default
-
-  ;==========================
-  ;==== Lookup Operation ====
-  ;==========================
-  defn lookup (k:K) :
-    val h = key-hash(k)
-    defn item (v:V) : TableItem<K,V>(h,k,v)
-    val slot = loc(h)
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
-        val v = default(k)
-        if create-on-default :
-          slots[slot] = item(v)
-          increment-size()
-        v
-      ;Case 2 of 3: Single item bucket
-      (s:TableItem<K,V>) :
-        ;Case 1 of 2: Item matches
-        if match?(s,h,k) :
-          value(s)
-        else :
-          val v = default(k)
-          if create-on-default :
-            create-bucket(slot, s, item(v))
-            increment-size()
-          v          
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, h)
-        match(index-of-item(s, i, n, h, k)) :
-          (idx:Int) :
-            value(s[idx])
-          (idx:False) :
-            val v = default(k)
-            if create-on-default :
-              add-to-bucket(slot, s, i, n, item(v))
-              increment-size()
-            v
-
-  ;==========================
-  ;==== Update Operation ====
-  ;==========================
-  defn update (f:V -> V, k:K) :
-    val h = key-hash(k)
-    defn item (v:V) : TableItem<K,V>(h,k,v)
-    val slot = loc(h)
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
-        val v = f(default(k))
-        slots[slot] = item(v)
-        increment-size()
-        v
-      ;Case 2 of 3: Single item bucket
-      (s:TableItem<K,V>) :
-        ;Case 1 of 2: Item matches
-        if match?(s,h,k) :
-          val v = f(value(s))
-          slots[slot] = item(v)
+;==========================
+;==== Lookup Operation ====
+;==========================
+defmethod get<?K,?V> (t:HashTable<?K,?V>, k:K) :
+  val h = key-hash(t, k)
+  defn item (v:V) : TableItem<K,V>(h,k,v)
+  val slot = loc(t, h)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      val v = default(t)(k)
+      if create-on-default(t) :
+        slots(t)[slot] = item(v)
+        increment-size(t)
+      v
+    ;Case 2 of 3: Single item bucket
+    (s:TableItem<K,V>) :
+      ;Case 1 of 2: Item matches
+      if match?(t, s,h,k) :
+        value(s)
+      else :
+        val v = default(t)(k)
+        if create-on-default(t) :
+          create-bucket(t, slot, s, item(v))
+          increment-size(t)
+        v          
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<TableItem<K,V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(t, s, n, h)
+      match(index-of-item(t, s, i, n, h, k)) :
+        (idx:Int) :
+          value(s[idx])
+        (idx:False) :
+          val v = default(t)(k)
+          if create-on-default(t) :
+            add-to-bucket(t,slot, s, i, n, item(v))
+            increment-size(t)
           v
-        else :
-          val v = f(default(k))
-          create-bucket(slot, s, item(v))
-          increment-size()
+
+;==========================
+;==== Update Operation ====
+;==========================
+defmethod update<?K,?V> (t:HashTable<?K,?V>, f:V -> V, k:K) :
+  val h = key-hash(t,k)
+  defn item (v:V) : TableItem<K,V>(h,k,v)
+  val slot = loc(t,h)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      val v = f(default(t)(k))
+      slots(t)[slot] = item(v)
+      increment-size(t)
+      v
+    ;Case 2 of 3: Single item bucket
+    (s:TableItem<K,V>) :
+      ;Case 1 of 2: Item matches
+      if match?(t,s,h,k) :
+        val v = f(value(s))
+        slots(t)[slot] = item(v)
+        v
+      else :
+        val v = f(default(t)(k))
+        create-bucket(t,slot, s, item(v))
+        increment-size(t)
+        v
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<TableItem<K,V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(t, s, n, h)
+      match(index-of-item(t, s, i, n, h, k)) :
+        (idx:Int) :
+          val v = f(value(s[idx]))
+          s[idx] = item(v)
           v
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, h)
-        match(index-of-item(s, i, n, h, k)) :
-          (idx:Int) :
-            val v = f(value(s[idx]))
-            s[idx] = item(v)
-            v
-          (idx:False) :
-            val v = f(default(k))
-            add-to-bucket(slot, s, i, n, item(v))
-            increment-size()
-            v
+        (idx:False) :
+          val v = f(default(t)(k))
+          add-to-bucket(t, slot, s, i, n, item(v))
+          increment-size(t)
+          v
 
-  ;========================
-  ;==== Key? Operation ====
-  ;========================
-  defn key? (k:K) :
-    val h = key-hash(k)
-    val slot = loc(h)
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) : false
-      ;Case 2 of 3: Single item bucket
-      (s:TableItem<K,V>) : match?(s,h,k)
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, h)
-        index-of-item(s, i, n, h, k) is Int
+;========================
+;==== Key? Operation ====
+;========================
+defmethod key?<?K,?V> (t:HashTable<?K,?V>, k:K) :
+  val h = key-hash(t, k)
+  val slot = loc(t, h)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) : false
+    ;Case 2 of 3: Single item bucket
+    (s:TableItem<K,V>) : match?(t,s,h,k)
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<TableItem<K,V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(t, s, n, h)
+      index-of-item(t, s, i, n, h, k) is Int
 
-  ;==========================
-  ;==== Remove Operation ====
-  ;==========================
-  defn remove (k:K) :
-    val h = key-hash(k)
-    val slot = loc(h)
-    match(slots[slot]) :
+;==========================
+;==== Remove Operation ====
+;==========================
+defmethod remove<?K,?V> (t:HashTable<?K,?V>, k:K) :
+  val h = key-hash(t,k)
+  val slot = loc(t,h)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      false
+    ;Case 2 of 3: Single item bucket
+    (s:TableItem<K,V>) :
+      if match?(t,s,h,k) :
+        slots(t)[slot] = sentinel()
+        decrement-size(t)
+        true
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<TableItem<K,V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(t, s, n, h)
+      match(index-of-item(t, s, i, n, h, k)) :
+        (idx:False) : false
+        (idx:Int) :
+          shift-left(s, idx, n)
+          sizes(t)[slot] = n - 1
+          decrement-size(t)
+          true
+
+;========================
+;==== Map! Operation ====
+;========================
+defn map!<?K,?V> (t:HashTable<?K,?V>, f:KeyValue<K,V> -> V) :
+  for (slot in slots(t), idx in 0 to false) do :
+    match(slot) :
       ;Case 1 of 3: Unoccupied bucket
       (s:Sentinel) :
         false
       ;Case 2 of 3: Single item bucket
       (s:TableItem<K,V>) :
-        if match?(s,h,k) :
-          slots[slot] = sentinel()
-          decrement-size()
-          true
+        val v = f(key(s) => value(s))
+        slots(t)[idx] = TableItem<K,V>(hash(s), key(s), v)
       ;Case 3 of 3: Multiple item bucket
       (s:Array<TableItem<K,V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, h)
-        match(index-of-item(s, i, n, h, k)) :
-          (idx:False) : false
-          (idx:Int) :
-            shift-left(s, idx, n)
-            sizes[slot] = n - 1
-            decrement-size()
-            true
+        val n = sizes(t)[idx]
+        for i in 0 to n do :
+          val x = s[i]
+          val v = f(key(x) => value(x))
+          s[i] = TableItem<K,V>(hash(x), key(x), v)
 
-  ;========================
-  ;==== Map! Operation ====
-  ;========================
-  defn map! (f:KeyValue<K,V> -> V) :
-    for (slot in slots, idx in 0 to false) do :
-      match(slot) :
-        ;Case 1 of 3: Unoccupied bucket
-        (s:Sentinel) :
-          false
-        ;Case 2 of 3: Single item bucket
-        (s:TableItem<K,V>) :
-          val v = f(key(s) => value(s))
-          slots[idx] = TableItem<K,V>(hash(s), key(s), v)
-        ;Case 3 of 3: Multiple item bucket
-        (s:Array<TableItem<K,V>>) :
-          val n = sizes[idx]
-          for i in 0 to n do :
-            val x = s[i]
-            val v = f(key(x) => value(x))
-            s[i] = TableItem<K,V>(hash(x), key(x), v)
+;=============================
+;==== Iteration Operation ====
+;=============================
+defn sequence<?K,?V,?T> (t:HashTable<?K,?V>, f:TableItem<K,V> -> ?T) :
+  val sizes = sizes(t)
+  val slots = slots(t)
+  generate<T> :
+    for idx in 0 to length(slots) do :
+      match(slots[idx]) :
+        (s:Sentinel) : false
+        (s:TableItem<K,V>) : yield(f(s))
+        (s:Array<TableItem<K,V>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
 
-  ;=============================
-  ;==== Iteration Operation ====
-  ;=============================
-  defn sequence<?T> (f:TableItem<K,V> -> ?T) :
-    val sizes = sizes
-    val slots = slots
-    generate<T> :
-      for idx in 0 to length(slots) do :
-        match(slots[idx]) :
-          (s:Sentinel) : false
-          (s:TableItem<K,V>) : yield(f(s))
-          (s:Array<TableItem<K,V>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
-
-  ;======================
-  ;==== Table Object ====
-  ;======================
-  new HashTable<K,V> :
-    defmethod set (this, k:K, v:V) :
-      put(TableItem<K,V>(key-hash(k), k, v))
-    defmethod get?<?D> (this, k:K, d:?D) :
-      lookup?(k, d)
-    defmethod get (this, k:K) :
-      lookup(k)
-    defmethod remove (this, k:K) :
-      remove(k)
-    defmethod clear (this) :
-      clear()
-    defmethod key? (this, k:K) :
-      key?(k)
-    defmethod update (this, f:V -> V, k:K) :
-      update(f, k)
-    defmethod map! (f:KeyValue<K,V> -> V, this) :
-      map!(f)
-    defmethod to-seq (this) :
-      defn make-entry (x:TableItem<K,V>) : key(x) => value(x)
-      sequence(make-entry)
-    defmethod keys (this) :
-      sequence(key)
-    defmethod values (this) :
-      sequence(value)
-    defmethod length (this) :
-      size
-    defmethod default (this, k:K) :
-      val v = default(k)
-      if create-on-default : this[k] = v
-      v
+defmethod to-seq<?K,?V> (t:HashTable<?K,?V>) :
+  defn make-entry (x:TableItem<K,V>) : key(x) => value(x)
+  sequence(t, make-entry)
+defmethod keys<?K,?V> (t:HashTable<?K,?V>) :
+  sequence(t, key)
+defmethod values<?K,?V> (t:HashTable<?K,?V>) :
+  sequence(t, value)
+defmethod length<?K,?V> (t:HashTable<?K,?V>) :
+  size(t)
+defmethod default<?K,?V> (t:HashTable<?K,?V>, k:K) :
+  val v = default(t)(k)
+  if create-on-default(t) : t[k] = v
+  v
 
 ;==================================
 ;==== Convenience Constructors ====
@@ -863,360 +855,345 @@ defmethod print (o:OutputStream, t:HashTable) :
 ;===================== Int Tables ===========================
 ;============================================================
 
-public deftype IntTable<V> <: Table<Int,V>
+public defstruct IntTable<V> <: Table<Int,V> :
+  cap : Int with: (setter => set-cap)
+  limit : Int with: (setter => set-limit, init => cap * 3 / 4)
+  mask : Int with: (setter => set-mask, init => cap - 1)  
+  slots : Array<Sentinel|IntItem<V>|Array<IntItem<V>>> with: (setter => set-slots, init => Array<Sentinel|IntItem<V>|Array<IntItem<V>>>(cap, sentinel()))
+  sizes : IntArray with: (setter => set-sizes, init => IntArray(cap, 0))
+  size : Int with: (setter => set-size, init => 0)
+  default : Int -> V
+  create-on-default: True|False
+with:
+  constructor => #IntTable
 
-public defn IntTable<V> (cap0:Int
+defn init<?V> (t:IntTable<?V>, c:Int) :
+  set-cap(t, c)
+  set-limit(t, c * 3 / 4)
+  set-mask(t, c - 1)
+  set-slots(t, Array<Sentinel|IntItem<V>|Array<IntItem<V>>>(c, sentinel()))
+  set-sizes(t, IntArray(c, 0))
+  set-size(t, 0)
+
+defn clear<?V> (t:IntTable<?V>) :
+  set-size(t, 0)
+  set-all(slots(t), 0 to false, sentinel())
+
+public defn IntTable<V> (cap0:Int,
                          default: Int -> V,
-                         create-on-default:True|False) :
-  ;=====================
-  ;==== Table State ====
-  ;=====================
-  var cap
-  var limit
-  var mask
-  var slots
-  var sizes
-  var size
+                         create-on-default:True|False) -> IntTable<V> :
+  #IntTable<V>(next-pow2(max(8, cap0)), default, create-on-default)
 
-  defn init (c:Int) :
-    cap = c
-    limit = c * 3 / 4
-    mask = cap - 1
-    slots = Array<Sentinel|IntItem<V>|Array<IntItem<V>>>(cap, sentinel())
-    sizes = IntArray(cap, 0)
-    size = 0
+defmethod length<?V> (t:IntTable<?V>) :
+  size(t)
 
-  defn clear () :
-    size = 0
-    set-all(slots, 0 to false, sentinel())
+defmethod default<?V> (t:IntTable<?V>, k:Int) :
+  val v = default(t)(k)
+  if create-on-default(t) : t[k] = v
+  v
 
-  init(next-pow2(max(8, cap0)))
+;===================
+;==== Utilities ====
+;===================
+defn loc<?V> (t:IntTable<?V>, h:Int) :
+  h & mask(t)
 
-  ;===================
-  ;==== Utilities ====
-  ;===================
-  defn loc (h:Int) :
-    h & mask
+;Matching predicate for IntItem
+defn match?<?V> (a:IntItem<?V>, k:Int) :
+  key(a) == k
+defn match?<?V> (a:IntItem<?V>, b:IntItem<?V>) :
+  match?(a, key(b))
 
-  ;Matching predicate for IntItem
-  defn match? (a:IntItem<V>, k:Int) :
-    key(a) == k
-  defn match? (a:IntItem<V>, b:IntItem<V>) :
-    match?(a, key(b))
+;Find number of items whose hash is less than h
+defn num-before<?V> (xs:Array<IntItem<?V>>, n:Int, k:Int) :
+  bsearch({key(_) < _}, xs, n, k)
 
-  ;Find number of items whose hash is less than h
-  defn num-before (xs:Array<IntItem<V>>, n:Int, k:Int) :
-    bsearch({key(_) < _}, xs, n, k)
+;Look for item with given hash and key starting from i
+defn* index-of-item<?V> (xs:Array<IntItem<?V>>, i:Int, n:Int, k:Int) :
+  if i < n :
+    val x = xs[i]
+    if key(x) == k : i
 
-  ;Look for item with given hash and key starting from i
-  defn* index-of-item (xs:Array<IntItem<V>>, i:Int, n:Int, k:Int) :
-    if i < n :
-      val x = xs[i]
-      if key(x) == k : i
+;Shift items in xs from i to n right by one element
+defn* shift-right<?V> (xs:Array<IntItem<?V>>, i:Int, n:Int) :
+  for j in n to i by -1 do :
+    xs[j] = xs[j - 1]
 
-  ;Shift items in xs from i to n right by one element
-  defn* shift-right (xs:Array<IntItem<V>>, i:Int, n:Int) :
-    for j in n to i by -1 do :
-      xs[j] = xs[j - 1]
+;Shift items in xs from (i + 1) to n left by one element
+defn* shift-left<?V> (xs:Array<IntItem<?V>>, i:Int, n:Int) :
+  for j in i to (n - 1) do :
+    xs[j] = xs[j + 1]    
 
-  ;Shift items in xs from (i + 1) to n left by one element
-  defn* shift-left (xs:Array<IntItem<V>>, i:Int, n:Int) :
-    for j in i to (n - 1) do :
-      xs[j] = xs[j + 1]    
+;Copy to new array with hole in position i
+defn* copy-with-hole<?V> (xs:Array<IntItem<?V>>, i:Int, n:Int) :
+  val xs* = Array<IntItem<V>>(length(xs) * 2)
+  xs*[0 to i] = xs[0 to i]
+  xs*[(i + 1) to (n + 1)] = xs[i to n]
+  xs*
 
-  ;Copy to new array with hole in position i
-  defn* copy-with-hole (xs:Array<IntItem<V>>, i:Int, n:Int) :
-    val xs* = Array<IntItem<V>>(length(xs) * 2)
-    xs*[0 to i] = xs[0 to i]
-    xs*[(i + 1) to (n + 1)] = xs[i to n]
-    xs*
+;==========================
+;==== Entry Operations ====
+;==========================
+defn increment-size<?V> (t:IntTable<?V>) :
+  set-size(t, size(t) + 1)
+  increase-capacity(t) when size(t) >= limit(t)
 
-  ;==========================
-  ;==== Entry Operations ====
-  ;==========================
-  defn increment-size () :
-    size = size + 1
-    increase-capacity() when size >= limit
-    
-  defn decrement-size () :
-    size = size - 1
+defn decrement-size<?V> (t:IntTable<?V>) :
+  set-size(t, size(t) - 1)
 
-  defn increase-capacity () :
-    val items = sequence({_})
-    init(cap * 2)
-    do(put, items)
+defn increase-capacity<?V> (t:IntTable<?V>) :
+  val items = sequence(t, {_})
+  init(t, cap(t) * 2)
+  do(put{t, _}, items)
 
-  defn create-bucket (slot:Int, x0:IntItem<V>, x1:IntItem<V>) :
-    val bucket = Array<IntItem<V>>(4)
-    slots[slot] = bucket
-    sizes[slot] = 2
-    ;Populate bucket
-    if key(x0) < key(x1) :
-      ;Add in front
-      bucket[0] = x0
-      bucket[1] = x1
-    else :
-      ;Add in back
-      bucket[0] = x1
-      bucket[1] = x0
+defn create-bucket<?V> (t:IntTable<?V>, slot:Int, x0:IntItem<V>, x1:IntItem<V>) :
+  val bucket = Array<IntItem<V>>(4)
+  slots(t)[slot] = bucket
+  sizes(t)[slot] = 2
+  ;Populate bucket
+  if key(x0) < key(x1) :
+    ;Add in front
+    bucket[0] = x0
+    bucket[1] = x1
+  else :
+    ;Add in back
+    bucket[0] = x1
+    bucket[1] = x0
 
-  defn add-to-bucket (slot:Int, bucket:Array<IntItem<V>>, i:Int, n:Int, x:IntItem<V>) :
-    ;Case 1 of 2: Bucket has space.
-    if n + 1 < length(bucket) :
-      shift-right(bucket, i, n)
-      bucket[i] = x
-    ;Case 2 of 2: Bucket is full.
-    else :
-      val bucket* = copy-with-hole(bucket, i, n)
-      slots[slot] = bucket*
-      bucket*[i] = x
-    sizes[slot] = n + 1
+defn add-to-bucket<?V> (t:IntTable<?V>, slot:Int, bucket:Array<IntItem<V>>, i:Int, n:Int, x:IntItem<V>) :
+  ;Case 1 of 2: Bucket has space.
+  if n + 1 < length(bucket) :
+    shift-right(bucket, i, n)
+    bucket[i] = x
+  ;Case 2 of 2: Bucket is full.
+  else :
+    val bucket* = copy-with-hole(bucket, i, n)
+    slots(t)[slot] = bucket*
+    bucket*[i] = x
+  sizes(t)[slot] = n + 1
 
-  ;=======================
-  ;==== Put Operation ====
-  ;=======================
-  defn put (x:IntItem<V>) :
-    val slot = loc(key(x))
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
-        ;New Entry
-        slots[slot] = x
-        increment-size()
-      ;Case 2 of 3: Single item bucket
-      (s:IntItem<V>) :
-        ;Case 1 of 2: Item matches
-        if match?(s,x) :
-          ;Replace Entry
-          slots[slot] = x
-        ;Case 2 of 2: Add Item
-        else :
-          create-bucket(slot, s, x)
-          increment-size()
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, key(x))
-        match(index-of-item(s, i, n, key(x))) :
-          ;Case 1 of 2: Item exists in bucket
-          (idx:Int) :
-            s[idx] = x
-          ;Case 2 of 2: Add new item to bucket
-          (idx:False) :
-            add-to-bucket(slot, s, i, n, x)
-            increment-size()
+;=======================
+;==== Put Operation ====
+;=======================
+defmethod set<?V> (t:IntTable<?V>, k:Int, v:V) :
+  put(t, IntItem<V>(k, v))
 
-  ;===========================
-  ;==== Lookup? Operation ====
-  ;===========================
-  defn lookup?<?D> (k:Int, default:?D) :
-    val slot = loc(k)
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
-        default
-      ;Case 2 of 3: Single item bucket
-      (s:IntItem<V>) :
-        ;Case 1 of 2: Item matches
-        if match?(s,k) : value(s)
-        else : default
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, k)
-        match(index-of-item(s, i, n, k)) :
-          (idx:Int) : value(s[idx])
-          (idx:False) : default
+defn put<?V> (t:IntTable<?V>, x:IntItem<V>) :
+  val slot = loc(t, key(x))
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      ;New Entry
+      slots(t)[slot] = x
+      increment-size(t)
+    ;Case 2 of 3: Single item bucket
+    (s:IntItem<V>) :
+      ;Case 1 of 2: Item matches
+      if match?(s,x) :
+        ;Replace Entry
+        slots(t)[slot] = x
+      ;Case 2 of 2: Add Item
+      else :
+        create-bucket(t, slot, s, x)
+        increment-size(t)
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<IntItem<V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(s, n, key(x))
+      match(index-of-item(s, i, n, key(x))) :
+        ;Case 1 of 2: Item exists in bucket
+        (idx:Int) :
+          s[idx] = x
+        ;Case 2 of 2: Add new item to bucket
+        (idx:False) :
+          add-to-bucket(t, slot, s, i, n, x)
+          increment-size(t)
 
-  ;==========================
-  ;==== Lookup Operation ====
-  ;==========================
-  defn lookup (k:Int) :
-    defn item (v:V) : IntItem<V>(k,v)
-    val slot = loc(k)
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
-        val v = default(k)
-        if create-on-default :
-          slots[slot] = item(v)
-          increment-size()
-        v
-      ;Case 2 of 3: Single item bucket
-      (s:IntItem<V>) :
-        ;Case 1 of 2: Item matches
-        if match?(s,k) :
-          value(s)
-        else :
-          val v = default(k)
-          if create-on-default :
-            create-bucket(slot, s, item(v))
-            increment-size()
-          v          
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, k)
-        match(index-of-item(s, i, n, k)) :
-          (idx:Int) :
-            value(s[idx])
-          (idx:False) :
-            val v = default(k)
-            if create-on-default :
-              add-to-bucket(slot, s, i, n, item(v))
-              increment-size()
-            v
+;===========================
+;==== Lookup? Operation ====
+;===========================
+defmethod get?<?V,?D> (t:IntTable<?V>, k:Int, default:?D) :
+  val slot = loc(t, k)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      default
+    ;Case 2 of 3: Single item bucket
+    (s:IntItem<V>) :
+      ;Case 1 of 2: Item matches
+      if match?(s,k) : value(s)
+      else : default
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<IntItem<V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(s, n, k)
+      match(index-of-item(s, i, n, k)) :
+        (idx:Int) : value(s[idx])
+        (idx:False) : default
 
-  ;==========================
-  ;==== Update Operation ====
-  ;==========================
-  defn update (f:V -> V, k:Int) :
-    defn item (v:V) : IntItem<V>(k,v)
-    val slot = loc(k)
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
-        val v = f(default(k))
-        slots[slot] = item(v)
-        increment-size()
-        v
-      ;Case 2 of 3: Single item bucket
-      (s:IntItem<V>) :
-        ;Case 1 of 2: Item matches
-        if match?(s,k) :
-          val v = f(value(s))
-          slots[slot] = item(v)
+;==========================
+;==== Lookup Operation ====
+;==========================
+defmethod get<?V> (t:IntTable<?V>, k:Int) :
+  defn item (v:V) : IntItem<V>(k,v)
+  val slot = loc(t, k)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      val v = default(t)(k)
+      if create-on-default(t) :
+        slots(t)[slot] = item(v)
+        increment-size(t)
+      v
+    ;Case 2 of 3: Single item bucket
+    (s:IntItem<V>) :
+      ;Case 1 of 2: Item matches
+      if match?(s,k) :
+        value(s)
+      else :
+        val v = default(t)(k)
+        if create-on-default(t) :
+          create-bucket(t, slot, s, item(v))
+          increment-size(t)
+        v          
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<IntItem<V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(s, n, k)
+      match(index-of-item(s, i, n, k)) :
+        (idx:Int) :
+          value(s[idx])
+        (idx:False) :
+          val v = default(t)(k)
+          if create-on-default(t) :
+            add-to-bucket(t, slot, s, i, n, item(v))
+            increment-size(t)
           v
-        else :
-          val v = f(default(k))
-          create-bucket(slot, s, item(v))
-          increment-size()
+
+;==========================
+;==== Update Operation ====
+;==========================
+defn update<?V> (t:IntTable<?V>, f:V -> V, k:Int) :
+  defn item (v:V) : IntItem<V>(k,v)
+  val slot = loc(t, k)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      val v = f(default(t)(k))
+      slots(t)[slot] = item(v)
+      increment-size(t)
+      v
+    ;Case 2 of 3: Single item bucket
+    (s:IntItem<V>) :
+      ;Case 1 of 2: Item matches
+      if match?(s,k) :
+        val v = f(value(s))
+        slots(t)[slot] = item(v)
+        v
+      else :
+        val v = f(default(t)(k))
+        create-bucket(t, slot, s, item(v))
+        increment-size(t)
+        v
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<IntItem<V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(s, n, k)
+      match(index-of-item(s, i, n, k)) :
+        (idx:Int) :
+          val v = f(value(s[idx]))
+          s[idx] = item(v)
           v
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, k)
-        match(index-of-item(s, i, n, k)) :
-          (idx:Int) :
-            val v = f(value(s[idx]))
-            s[idx] = item(v)
-            v
-          (idx:False) :
-            val v = f(default(k))
-            add-to-bucket(slot, s, i, n, item(v))
-            increment-size()
-            v
+        (idx:False) :
+          val v = f(default(t)(k))
+          add-to-bucket(t, slot, s, i, n, item(v))
+          increment-size(t)
+          v
 
-  ;========================
-  ;==== Key? Operation ====
-  ;========================
-  defn key? (k:Int) :
-    val slot = loc(k)
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) : false
-      ;Case 2 of 3: Single item bucket
-      (s:IntItem<V>) : match?(s,k)
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, k)
-        index-of-item(s, i, n, k) is Int
+;========================
+;==== Key? Operation ====
+;========================
+defn key?<?V> (t:IntTable<?V>, k:Int) :
+  val slot = loc(t, k)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) : false
+    ;Case 2 of 3: Single item bucket
+    (s:IntItem<V>) : match?(s,k)
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<IntItem<V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(s, n, k)
+      index-of-item(s, i, n, k) is Int
 
-  ;==========================
-  ;==== Remove Operation ====
-  ;==========================
-  defn remove (k:Int) :
-    val slot = loc(k)
-    match(slots[slot]) :
+;==========================
+;==== Remove Operation ====
+;==========================
+defn remove<?V> (t:IntTable<?V>, k:Int) :
+  val slot = loc(t, k)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      false
+    ;Case 2 of 3: Single item bucket
+    (s:IntItem<V>) :
+      if match?(s,k) :
+        slots(t)[slot] = sentinel()
+        decrement-size(t)
+        true
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<IntItem<V>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(s, n, k)
+      match(index-of-item(s, i, n, k)) :
+        (idx:False) : false
+        (idx:Int) :
+          shift-left(s, idx, n)
+          sizes(t)[slot] = n - 1
+          decrement-size(t)
+          true
+
+;========================
+;==== Map! Operation ====
+;========================
+defmethod map!<?V> (f:KeyValue<Int,V> -> V, t:IntTable<?V>) :
+  for (slot in slots(t), idx in 0 to false) do :
+    match(slot) :
       ;Case 1 of 3: Unoccupied bucket
       (s:Sentinel) :
         false
       ;Case 2 of 3: Single item bucket
       (s:IntItem<V>) :
-        if match?(s,k) :
-          slots[slot] = sentinel()
-          decrement-size()
-          true
+        val v = f(key(s) => value(s))
+        slots(t)[idx] = IntItem<V>(key(s), v)
       ;Case 3 of 3: Multiple item bucket
       (s:Array<IntItem<V>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, k)
-        match(index-of-item(s, i, n, k)) :
-          (idx:False) : false
-          (idx:Int) :
-            shift-left(s, idx, n)
-            sizes[slot] = n - 1
-            decrement-size()
-            true
+        val n = sizes(t)[idx]
+        for i in 0 to n do :
+          val x = s[i]
+          val v = f(key(x) => value(x))
+          s[i] = IntItem<V>(key(x), v)
 
-  ;========================
-  ;==== Map! Operation ====
-  ;========================
-  defn map! (f:KeyValue<Int,V> -> V) :
-    for (slot in slots, idx in 0 to false) do :
-      match(slot) :
-        ;Case 1 of 3: Unoccupied bucket
-        (s:Sentinel) :
-          false
-        ;Case 2 of 3: Single item bucket
-        (s:IntItem<V>) :
-          val v = f(key(s) => value(s))
-          slots[idx] = IntItem<V>(key(s), v)
-        ;Case 3 of 3: Multiple item bucket
-        (s:Array<IntItem<V>>) :
-          val n = sizes[idx]
-          for i in 0 to n do :
-            val x = s[i]
-            val v = f(key(x) => value(x))
-            s[i] = IntItem<V>(key(x), v)
+;=============================
+;==== Iteration Operation ====
+;=============================
+defn sequence<?V,?T> (t:IntTable<?V>, f:IntItem<V> -> ?T) :
+  val sizes = sizes(t)
+  val slots = slots(t)
+  generate<T> :
+    for idx in 0 to length(slots) do :
+      match(slots[idx]) :
+        (s:Sentinel) : false
+        (s:IntItem<V>) : yield(f(s))
+        (s:Array<IntItem<V>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
 
-  ;=============================
-  ;==== Iteration Operation ====
-  ;=============================
-  defn sequence<?T> (f:IntItem<V> -> ?T) :
-    val sizes = sizes
-    val slots = slots
-    generate<T> :
-      for idx in 0 to length(slots) do :
-        match(slots[idx]) :
-          (s:Sentinel) : false
-          (s:IntItem<V>) : yield(f(s))
-          (s:Array<IntItem<V>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
-
-  ;======================
-  ;==== Table Object ====
-  ;======================
-  new IntTable<V> :
-    defmethod set (this, k:Int, v:V) :
-      put(IntItem<V>(k, v))
-    defmethod get?<?D> (this, k:Int, d:?D) :
-      lookup?(k, d)
-    defmethod get (this, k:Int) :
-      lookup(k)
-    defmethod remove (this, k:Int) :
-      remove(k)
-    defmethod clear (this) :
-      clear()
-    defmethod key? (this, k:Int) :
-      key?(k)
-    defmethod update (this, f:V -> V, k:Int) :
-      update(f, k)
-    defmethod map! (f:KeyValue<Int,V> -> V, this) :
-      map!(f)
-    defmethod to-seq (this) :
-      defn make-entry (x:IntItem<V>) : key(x) => value(x)
-      sequence(make-entry)
-    defmethod keys (this) :
-      sequence(key)
-    defmethod values (this) :
-      sequence(value)
-    defmethod length (this) :
-      size
-    defmethod default (this, k:Int) :
-      val v = default(k)
-      if create-on-default : this[k] = v
-      v
+defmethod to-seq<?V> (t:IntTable<?V>) :
+  defn make-entry (x:IntItem<V>) : key(x) => value(x)
+  sequence(t, make-entry)
+defmethod keys<?V> (t:IntTable<?V>) :
+  sequence(t, key)
+defmethod values<?V> (t:IntTable<?V>) :
+  sequence(t, value)
 
 ;==================================
 ;==== Convenience Constructors ====
@@ -1282,229 +1259,230 @@ defmethod same-contents? (a:Set, b:Set) :
 ;====================== HashSets ============================
 ;============================================================
 
-public deftype HashSet<K> <: Set<K>
+public defstruct HashSet<K> <: Set<K> :
+  cap : Int with: (setter => set-cap)
+  limit : Int with: (setter => set-limit, init => cap * 3 / 4)
+  mask : Int with: (setter => set-mask, init => cap - 1)  
+  slots : Array<Sentinel|SetItem<K>|Array<SetItem<K>>> with: (setter => set-slots, init => Array<Sentinel|SetItem<K>|Array<SetItem<K>>>(cap, sentinel()))
+  sizes : IntArray with: (setter => set-sizes, init => IntArray(cap, 0))
+  size : Int with: (setter => set-size, init => 0)
+  key-hash : K -> Int
+  key-equal? : (K,K) -> True | False
+with:
+  constructor => #HashSet
 
-public defn HashSet<K> (cap0:Int
-                        key-hash: K -> Int
-                        key-equal?: (K,K) -> True|False) :
-  ;=====================
-  ;==== Table State ====
-  ;=====================
-  var cap
-  var limit
-  var mask
-  var slots
-  var sizes
-  var size
+defn init<?K> (t:HashSet<?K>, c:Int) :
+  set-cap(t, c)
+  set-limit(t, c * 3 / 4)
+  set-mask(t, c - 1)
+  set-slots(t, Array<Sentinel|SetItem<K>|Array<SetItem<K>>>(c, sentinel()))
+  set-sizes(t, IntArray(c, 0))
+  set-size(t, 0)
 
-  defn init (c:Int) :
-    cap = c
-    limit = c * 3 / 4
-    mask = cap - 1
-    slots = Array<Sentinel|SetItem<K>|Array<SetItem<K>>>(cap, sentinel())
-    sizes = IntArray(cap, 0)
-    size = 0
+defn clear<?K> (t:HashSet<?K>) :
+  set-size(t, 0)
+  set-all(slots(t), 0 to false, sentinel())
 
-  defn clear () :
-    size = 0
-    set-all(slots, 0 to false, sentinel())
+public defn HashSet<K> (cap0:Int,
+                        key-hash: K -> Int,
+                        key-equal?: (K,K) -> True|False) -> HashSet<K> :
+  #HashSet<K>(next-pow2(max(8, cap0)), key-hash, key-equal?)
 
-  init(next-pow2(max(8, cap0)))
 
-  ;===================
-  ;==== Utilities ====
-  ;===================
-  defn set-item (k:K) :
-    SetItem<K>(key-hash(k), k)
-    
-  defn loc (h:Int) :
-    h & mask
+;===================
+;==== Utilities ====
+;===================
+defn set-item<?K> (s:HashSet<?K>, k:K) :
+  SetItem<K>(key-hash(s, k), k)
 
-  ;Matching predicate for TableItem
-  defn match? (a:SetItem<K>, b:SetItem<K>) :
-    hash(a) == hash(b) and
-    key-equal?(key(a), key(b))
+defn loc<?K> (s:HashSet<?K>, h:Int) :
+  h & mask(s)
 
-  ;Find number of items whose hash is less than h
-  defn num-before (xs:Array<SetItem<K>>, n:Int, x:SetItem<K>) :
-    bsearch({hash(_) < hash(_)}, xs, n, x)
+defn key-hash<?K> (t:HashSet<?K>, k:K) -> Int :
+  key-hash(t)(k)
 
-  ;Look for item with given hash and key starting from i
-  defn* index-of-item (xs:Array<SetItem<K>>, i:Int, n:Int, y:SetItem<K>) :
-    if i < n :
-      val x = xs[i]
-      if hash(x) == hash(y) :
-        if key-equal?(key(x), key(y)) : i
-        else : index-of-item(xs, i + 1, n, y)
+defn key-equal?<?K> (t:HashSet<?K>, x:K, y:K) -> True|False :
+  key-equal?(t)(x, y)
 
-  ;Shift items in xs from i to n right by one element
-  defn* shift-right (xs:Array<SetItem<K>>, i:Int, n:Int) :
-    for j in n to i by -1 do :
-      xs[j] = xs[j - 1]
+;Matching predicate for TableItem
+defn match?<?K> (s:HashSet<?K>, a:SetItem<K>, b:SetItem<K>) :
+  hash(a) == hash(b) and
+  key-equal?(s, key(a), key(b))
 
-  ;Shift items in xs from (i + 1) to n left by one element
-  defn* shift-left (xs:Array<SetItem<K>>, i:Int, n:Int) :
-    for j in i to (n - 1) do :
-      xs[j] = xs[j + 1]    
+;Find number of items whose hash is less than h
+defn num-before<?K> (s:HashSet<?K>, xs:Array<SetItem<K>>, n:Int, x:SetItem<K>) :
+  bsearch({hash(_) < hash(_)}, xs, n, x)
 
-  ;Copy to new array with hole in position i
-  defn* copy-with-hole (xs:Array<SetItem<K>>, i:Int, n:Int) :
-    val xs* = Array<SetItem<K>>(length(xs) * 2)
-    xs*[0 to i] = xs[0 to i]
-    xs*[(i + 1) to (n + 1)] = xs[i to n]
-    xs*
+;Look for item with given hash and key starting from i
+defn* index-of-item<?K> (s:HashSet<?K>, xs:Array<SetItem<K>>, i:Int, n:Int, y:SetItem<K>) :
+  if i < n :
+    val x = xs[i]
+    if hash(x) == hash(y) :
+      if key-equal?(s, key(x), key(y)) : i
+      else : index-of-item(s, xs, i + 1, n, y)
 
-  ;==========================
-  ;==== Entry Operations ====
-  ;==========================
-  defn increment-size () :
-    size = size + 1
-    increase-capacity() when size >= limit
-    
-  defn decrement-size () :
-    size = size - 1
+;Shift items in xs from i to n right by one element
+defn* shift-right<?K> (xs:Array<SetItem<?K>>, i:Int, n:Int) :
+  for j in n to i by -1 do :
+    xs[j] = xs[j - 1]
 
-  defn increase-capacity () :
-    val items = sequence({_})
-    init(cap * 2)
-    do(put, items)
+;Shift items in xs from (i + 1) to n left by one element
+defn* shift-left<?K> (xs:Array<SetItem<?K>>, i:Int, n:Int) :
+  for j in i to (n - 1) do :
+    xs[j] = xs[j + 1]    
 
-  defn create-bucket (slot:Int, x0:SetItem<K>, x1:SetItem<K>) :
-    val bucket = Array<SetItem<K>>(4)
-    slots[slot] = bucket
-    sizes[slot] = 2
-    ;Populate bucket
-    if hash(x0) < hash(x1) :
-      ;Add in front
-      bucket[0] = x0
-      bucket[1] = x1
-    else :
-      ;Add in back
-      bucket[0] = x1
-      bucket[1] = x0
+;Copy to new array with hole in position i
+defn* copy-with-hole<?K> (xs:Array<SetItem<?K>>, i:Int, n:Int) :
+  val xs* = Array<SetItem<K>>(length(xs) * 2)
+  xs*[0 to i] = xs[0 to i]
+  xs*[(i + 1) to (n + 1)] = xs[i to n]
+  xs*
 
-  defn add-to-bucket (slot:Int, bucket:Array<SetItem<K>>, i:Int, n:Int, x:SetItem<K>) :
-    ;Case 1 of 2: Bucket has space.
-    if n + 1 < length(bucket) :
-      shift-right(bucket, i, n)
-      bucket[i] = x
-    ;Case 2 of 2: Bucket is full.
-    else :
-      val bucket* = copy-with-hole(bucket, i, n)
-      slots[slot] = bucket*
-      bucket*[i] = x
-    sizes[slot] = n + 1
+;==========================
+;==== Entry Operations ====
+;==========================
+defn increment-size<?K> (s:HashSet<?K>) :
+  set-size(s, size(s) + 1)
+  increase-capacity(s) when size(s) >= limit(s)
 
-  ;=======================
-  ;==== Put Operation ====
-  ;=======================
-  ;Returns true if new item is added
-  defn put (x:SetItem<K>) :
-    val slot = loc(hash(x))
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
-        ;New Entry
-        slots[slot] = x
-        increment-size()
-        true
-      ;Case 2 of 3: Single item bucket
-      (s:SetItem<K>) :
-        ;Case 1 of 2: Item matches
-        if match?(s,x) :
-          false
-        ;Case 2 of 2: Add Item
-        else :
-          create-bucket(slot, s, x)
-          increment-size()
-          true
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<SetItem<K>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, x)
-        match(index-of-item(s, i, n, x)) :
-          ;Case 1 of 2: Item exists in bucket
-          (idx:Int) :
-            false
-          ;Case 2 of 2: Add new item to bucket
-          (idx:False) :
-            add-to-bucket(slot, s, i, n, x)
-            increment-size()
-            true
+defn decrement-size<?K> (s:HashSet<?K>) :
+  set-size(s, size(s) - 1)
 
-  ;========================
-  ;==== Key? Operation ====
-  ;========================
-  defn exists? (x:SetItem<K>) :
-    val slot = loc(hash(x))
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) : false
-      ;Case 2 of 3: Single item bucket
-      (s:SetItem<K>) : match?(s,x)
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<SetItem<K>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, x)
-        index-of-item(s, i, n, x) is Int
+defn increase-capacity<?K> (s:HashSet<?K>) :
+  val items = sequence(s, {_})
+  init(s, cap(s) * 2)
+  do(put{s, _}, items)
 
-  ;==========================
-  ;==== Remove Operation ====
-  ;==========================
-  ;Returns true if item was removed
-  defn remove (x:SetItem<K>) :
-    val slot = loc(hash(x))
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
+defn create-bucket<?K> (t:HashSet<?K>, slot:Int, x0:SetItem<K>, x1:SetItem<K>) :
+  val bucket = Array<SetItem<K>>(4)
+  slots(t)[slot] = bucket
+  sizes(t)[slot] = 2
+  ;Populate bucket
+  if hash(x0) < hash(x1) :
+    ;Add in front
+    bucket[0] = x0
+    bucket[1] = x1
+  else :
+    ;Add in back
+    bucket[0] = x1
+    bucket[1] = x0
+
+defn add-to-bucket<?K> (t:HashSet<?K>, slot:Int, bucket:Array<SetItem<K>>, i:Int, n:Int, x:SetItem<K>) :
+  ;Case 1 of 2: Bucket has space.
+  if n + 1 < length(bucket) :
+    shift-right(bucket, i, n)
+    bucket[i] = x
+  ;Case 2 of 2: Bucket is full.
+  else :
+    val bucket* = copy-with-hole(bucket, i, n)
+    slots(t)[slot] = bucket*
+    bucket*[i] = x
+  sizes(t)[slot] = n + 1
+
+;=======================
+;==== Put Operation ====
+;=======================
+;Returns true if new item is added
+defn put<?K> (t:HashSet<?K>, x:SetItem<K>) :
+  val slot = loc(t, hash(x))
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      ;New Entry
+      slots(t)[slot] = x
+      increment-size(t)
+      true
+    ;Case 2 of 3: Single item bucket
+    (s:SetItem<K>) :
+      ;Case 1 of 2: Item matches
+      if match?(t,s,x) :
         false
-      ;Case 2 of 3: Single item bucket
-      (s:SetItem<K>) :
-        if match?(s,x) :
-          slots[slot] = sentinel()
-          decrement-size()
+      ;Case 2 of 2: Add Item
+      else :
+        create-bucket(t, slot, s, x)
+        increment-size(t)
+        true
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<SetItem<K>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(t, s, n, x)
+      match(index-of-item(t, s, i, n, x)) :
+        ;Case 1 of 2: Item exists in bucket
+        (idx:Int) :
+          false
+        ;Case 2 of 2: Add new item to bucket
+        (idx:False) :
+          add-to-bucket(t, slot, s, i, n, x)
+          increment-size(t)
           true
-      ;Case 3 of 3: Multiple item bucket
-      (s:Array<SetItem<K>>) :
-        val n = sizes[slot]
-        val i = num-before(s, n, x)
-        match(index-of-item(s, i, n, x)) :
-          (idx:False) : false
-          (idx:Int) :
-            shift-left(s, idx, n)
-            sizes[slot] = n - 1
-            decrement-size()
-            true
 
-  ;=============================
-  ;==== Iteration Operation ====
-  ;=============================
-  defn sequence<?T> (f:SetItem<K> -> ?T) :
-    val sizes = sizes
-    val slots = slots
-    generate<T> :
-      for idx in 0 to length(slots) do :
-        match(slots[idx]) :
-          (s:Sentinel) : false
-          (s:SetItem<K>) : yield(f(s))
-          (s:Array<SetItem<K>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
+;========================
+;==== Key? Operation ====
+;========================
+defn exists?<?K> (t:HashSet<?K>, x:SetItem<K>) :
+  val slot = loc(t, hash(x))
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) : false
+    ;Case 2 of 3: Single item bucket
+    (s:SetItem<K>) : match?(t,s,x)
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<SetItem<K>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(t, s, n, x)
+      index-of-item(t, s, i, n, x) is Int
 
-  ;======================
-  ;==== Table Object ====
-  ;======================
-  new HashSet<K> :
-    defmethod add (this, k:K) :
-      put(set-item(k))
-    defmethod get (this, k:K) :
-      exists?(set-item(k))
-    defmethod remove (this, k:K) :
-      remove(set-item(k))     
-    defmethod clear (this) :
-      clear()
-    defmethod to-seq (this) :
-      sequence(key)
-    defmethod length (this) :
-      size
+;==========================
+;==== Remove Operation ====
+;==========================
+;Returns true if item was removed
+defn remove<?K> (t:HashSet<?K>,x:SetItem<K>) :
+  val slot = loc(t, hash(x))
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      false
+    ;Case 2 of 3: Single item bucket
+    (s:SetItem<K>) :
+      if match?(t,s,x) :
+        slots(t)[slot] = sentinel()
+        decrement-size(t)
+        true
+    ;Case 3 of 3: Multiple item bucket
+    (s:Array<SetItem<K>>) :
+      val n = sizes(t)[slot]
+      val i = num-before(t, s, n, x)
+      match(index-of-item(t, s, i, n, x)) :
+        (idx:False) : false
+        (idx:Int) :
+          shift-left(s, idx, n)
+          sizes(t)[slot] = n - 1
+          decrement-size(t)
+          true
+
+;=============================
+;==== Iteration Operation ====
+;=============================
+defn sequence<?K,?T> (s:HashSet<?K>, f:SetItem<K> -> ?T) :
+  val sizes = sizes(s)
+  val slots = slots(s)
+  generate<T> :
+    for idx in 0 to length(slots) do :
+      match(slots[idx]) :
+        (s:Sentinel) : false
+        (s:SetItem<K>) : yield(f(s))
+        (s:Array<SetItem<K>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
+
+defmethod add<?K> (s:HashSet<?K>, k:K) :
+  put(s, set-item(s, k))
+defmethod get<?K> (s:HashSet<?K>, k:K) :
+  exists?(s, set-item(s, k))
+defmethod remove<?K> (s:HashSet<?K>, k:K) :
+  remove(s, set-item(s, k))     
+defmethod to-seq<?K> (s:HashSet<?K>) :
+  sequence(s, key)
+defmethod length<?K> (s:HashSet<?K>) :
+  size(s)
 
 ;==================================
 ;==== Convenience Constructors ====
@@ -1538,217 +1516,200 @@ defmethod print (o:OutputStream, s:HashSet) :
 ;====================== IntSets =============================
 ;============================================================
 
-public deftype IntSet <: Set<Int>
+public defstruct IntSet <: Set<Int> :
+  cap : Int with: (setter => set-cap)
+  limit : Int with: (setter => set-limit, init => cap * 3 / 4)
+  mask : Int with: (setter => set-mask, init => cap - 1)  
+  slots : Array<Sentinel|Int|IntArray> with: (setter => set-slots, init => Array<Sentinel|Int|IntArray>(cap, sentinel()))
+  sizes : IntArray with: (setter => set-sizes, init => IntArray(cap, 0))
+  size : Int with: (setter => set-size, init => 0)
+with:
+  constructor => #IntSet
 
-public defn IntSet (cap0:Int) :
-  ;=====================
-  ;==== Table State ====
-  ;=====================
-  var cap
-  var limit
-  var mask
-  var slots
-  var sizes
-  var size
+defn init (t:IntSet, c:Int) :
+  set-cap(t, c)
+  set-limit(t, c * 3 / 4)
+  set-mask(t, c - 1)
+  set-slots(t, Array<Sentinel|Int|IntArray>(c, sentinel()))
+  set-sizes(t, IntArray(c, 0))
+  set-size(t, 0)
 
-  defn init (c:Int) :
-    cap = c
-    limit = c * 3 / 4
-    mask = cap - 1
-    slots = Array<Sentinel|Int|IntArray>(cap, sentinel())
-    sizes = IntArray(cap, 0)
-    size = 0
+defmethod clear (t:IntSet) :
+  set-size(t, 0)
+  set-all(slots(t), 0 to false, sentinel())
 
-  defn clear () :
-    size = 0
-    set-all(slots, 0 to false, sentinel())
+public defn IntSet (cap0:Int) -> IntSet :
+  #IntSet(next-pow2(max(8, cap0)))
 
-  init(next-pow2(max(8, cap0)))
+;===================
+;==== Utilities ====
+;===================    
+defn loc (t:IntSet, h:Int) :
+  h & mask(t)
 
-  ;===================
-  ;==== Utilities ====
-  ;===================    
-  defn loc (h:Int) :
-    h & mask
+;Find number of items whose hash is less than h
+defn num-before (xs:IntArray, n:Int, x:Int) :
+  bsearch(less?, xs, n, x)
 
-  ;Find number of items whose hash is less than h
-  defn num-before (xs:IntArray, n:Int, x:Int) :
-    bsearch(less?, xs, n, x)
+;Look for item with given hash and key starting from i
+defn* index-of-item (xs:IntArray, i:Int, n:Int, y:Int) :
+  if i < n :
+    val x = xs[i]
+    if x == y : i
 
-  ;Look for item with given hash and key starting from i
-  defn* index-of-item (xs:IntArray, i:Int, n:Int, y:Int) :
-    if i < n :
-      val x = xs[i]
-      if x == y : i
+;Shift items in xs from i to n right by one element
+defn* shift-right (xs:IntArray, i:Int, n:Int) :
+  for j in n to i by -1 do :
+    xs[j] = xs[j - 1]
 
-  ;Shift items in xs from i to n right by one element
-  defn* shift-right (xs:IntArray, i:Int, n:Int) :
-    for j in n to i by -1 do :
-      xs[j] = xs[j - 1]
+;Shift items in xs from (i + 1) to n left by one element
+defn* shift-left (xs:IntArray, i:Int, n:Int) :
+  for j in i to (n - 1) do :
+    xs[j] = xs[j + 1]    
 
-  ;Shift items in xs from (i + 1) to n left by one element
-  defn* shift-left (xs:IntArray, i:Int, n:Int) :
-    for j in i to (n - 1) do :
-      xs[j] = xs[j + 1]    
+;Copy to new array with hole in position i
+defn* copy-with-hole (xs:IntArray, i:Int, n:Int) :
+  val xs* = IntArray(length(xs) * 2)
+  xs*[0 to i] = xs[0 to i]
+  xs*[(i + 1) to (n + 1)] = xs[i to n]
+  xs*
 
-  ;Copy to new array with hole in position i
-  defn* copy-with-hole (xs:IntArray, i:Int, n:Int) :
-    val xs* = IntArray(length(xs) * 2)
-    xs*[0 to i] = xs[0 to i]
-    xs*[(i + 1) to (n + 1)] = xs[i to n]
-    xs*
+;==========================
+;==== Entry Operations ====
+;==========================
+defn increment-size (t:IntSet) :
+  set-size(t, length(t) + 1)
+  increase-capacity(t) when length(t) >= limit(t)
 
-  ;==========================
-  ;==== Entry Operations ====
-  ;==========================
-  defn increment-size () :
-    size = size + 1
-    increase-capacity() when size >= limit
-    
-  defn decrement-size () :
-    size = size - 1
+defn decrement-size (t:IntSet) :
+  set-size(t, length(t) - 1)
 
-  defn increase-capacity () :
-    val items = sequence()
-    init(cap * 2)
-    do(put, items)
+defn increase-capacity (t:IntSet) :
+  init(t, cap(t) * 2)
+  do(add{t, _}, to-seq(t))
 
-  defn create-bucket (slot:Int, x0:Int, x1:Int) :
-    val bucket = IntArray(4)
-    slots[slot] = bucket
-    sizes[slot] = 2
-    ;Populate bucket
-    if x0 < x1 :
-      ;Add in front
-      bucket[0] = x0
-      bucket[1] = x1
-    else :
-      ;Add in back
-      bucket[0] = x1
-      bucket[1] = x0
+defn create-bucket (t:IntSet, slot:Int, x0:Int, x1:Int) :
+  val bucket = IntArray(4)
+  slots(t)[slot] = bucket
+  sizes(t)[slot] = 2
+  ;Populate bucket
+  if x0 < x1 :
+    ;Add in front
+    bucket[0] = x0
+    bucket[1] = x1
+  else :
+    ;Add in back
+    bucket[0] = x1
+    bucket[1] = x0
 
-  defn add-to-bucket (slot:Int, bucket:IntArray, i:Int, n:Int, x:Int) :
-    ;Case 1 of 2: Bucket has space.
-    if n + 1 < length(bucket) :
-      shift-right(bucket, i, n)
-      bucket[i] = x
-    ;Case 2 of 2: Bucket is full.
-    else :
-      val bucket* = copy-with-hole(bucket, i, n)
-      slots[slot] = bucket*
-      bucket*[i] = x
-    sizes[slot] = n + 1
+defn add-to-bucket (t:IntSet, slot:Int, bucket:IntArray, i:Int, n:Int, x:Int) :
+  ;Case 1 of 2: Bucket has space.
+  if n + 1 < length(bucket) :
+    shift-right(bucket, i, n)
+    bucket[i] = x
+  ;Case 2 of 2: Bucket is full.
+  else :
+    val bucket* = copy-with-hole(bucket, i, n)
+    slots(t)[slot] = bucket*
+    bucket*[i] = x
+  sizes(t)[slot] = n + 1
 
-  ;=======================
-  ;==== Put Operation ====
-  ;=======================
-  ;Returns true if new item is added
-  defn put (x:Int) :
-    val slot = loc(x)
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
-        ;New Entry
-        slots[slot] = x
-        increment-size()
-        true
-      ;Case 2 of 3: Single item bucket
-      (s:Int) :
-        ;Case 1 of 2: Item matches
-        if s == x :
-          false
-        ;Case 2 of 2: Add Item
-        else :
-          create-bucket(slot, s, x)
-          increment-size()
-          true
-      ;Case 3 of 3: Multiple item bucket
-      (s:IntArray) :
-        val n = sizes[slot]
-        val i = num-before(s, n, x)
-        match(index-of-item(s, i, n, x)) :
-          ;Case 1 of 2: Item exists in bucket
-          (idx:Int) :
-            false
-          ;Case 2 of 2: Add new item to bucket
-          (idx:False) :
-            add-to-bucket(slot, s, i, n, x)
-            increment-size()
-            true
-
-  ;========================
-  ;==== Key? Operation ====
-  ;========================
-  defn exists? (x:Int) :
-    val slot = loc(x)
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) : false
-      ;Case 2 of 3: Single item bucket
-      (s:Int) : s == x
-      ;Case 3 of 3: Multiple item bucket
-      (s:IntArray) :
-        val n = sizes[slot]
-        val i = num-before(s, n, x)
-        index-of-item(s, i, n, x) is Int
-
-  ;==========================
-  ;==== Remove Operation ====
-  ;==========================
-  ;Returns true if item was removed
-  defn remove (x:Int) :
-    val slot = loc(hash(x))
-    match(slots[slot]) :
-      ;Case 1 of 3: Unoccupied bucket
-      (s:Sentinel) :
+;=======================
+;==== Put Operation ====
+;=======================
+;Returns true if new item is added
+defmethod add (t:IntSet, x:Int) :
+  val slot = loc(t, x)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      ;New Entry
+      slots(t)[slot] = x
+      increment-size(t)
+      true
+    ;Case 2 of 3: Single item bucket
+    (s:Int) :
+      ;Case 1 of 2: Item matches
+      if s == x :
         false
-      ;Case 2 of 3: Single item bucket
-      (s:Int) :
-        if s == x :
-          slots[slot] = sentinel()
-          decrement-size()
+      ;Case 2 of 2: Add Item
+      else :
+        create-bucket(t, slot, s, x)
+        increment-size(t)
+        true
+    ;Case 3 of 3: Multiple item bucket
+    (s:IntArray) :
+      val n = sizes(t)[slot]
+      val i = num-before(s, n, x)
+      match(index-of-item(s, i, n, x)) :
+        ;Case 1 of 2: Item exists in bucket
+        (idx:Int) :
+          false
+        ;Case 2 of 2: Add new item to bucket
+        (idx:False) :
+          add-to-bucket(t, slot, s, i, n, x)
+          increment-size(t)
           true
-      ;Case 3 of 3: Multiple item bucket
-      (s:IntArray) :
-        val n = sizes[slot]
-        val i = num-before(s, n, x)
-        match(index-of-item(s, i, n, x)) :
-          (idx:False) : false
-          (idx:Int) :
-            shift-left(s, idx, n)
-            sizes[slot] = n - 1
-            decrement-size()
-            true
 
-  ;=============================
-  ;==== Iteration Operation ====
-  ;=============================
-  defn sequence () :
-    val sizes = sizes
-    val slots = slots
-    generate<Int> :
-      for idx in 0 to length(slots) do :
-        match(slots[idx]) :
-          (s:Sentinel) : false
-          (s:Int) : yield(s)
-          (s:IntArray) : for j in 0 to sizes[idx] do : yield(s[j])
+;========================
+;==== Key? Operation ====
+;========================
+defmethod get (t:IntSet, x:Int) :
+  val slot = loc(t, x)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) : false
+    ;Case 2 of 3: Single item bucket
+    (s:Int) : s == x
+    ;Case 3 of 3: Multiple item bucket
+    (s:IntArray) :
+      val n = sizes(t)[slot]
+      val i = num-before(s, n, x)
+      index-of-item(s, i, n, x) is Int
 
-  ;======================
-  ;==== Table Object ====
-  ;======================
-  new IntSet :
-    defmethod add (this, k:Int) :
-      put(k)
-    defmethod get (this, k:Int) :
-      exists?(k)
-    defmethod remove (this, k:Int) :
-      remove(k)     
-    defmethod clear (this) :
-      clear()
-    defmethod to-seq (this) :
-      sequence()
-    defmethod length (this) :
-      size
+;==========================
+;==== Remove Operation ====
+;==========================
+;Returns true if item was removed
+defmethod remove (t:IntSet, x:Int) :
+  val slot = loc(t, x)
+  match(slots(t)[slot]) :
+    ;Case 1 of 3: Unoccupied bucket
+    (s:Sentinel) :
+      false
+    ;Case 2 of 3: Single item bucket
+    (s:Int) :
+      if s == x :
+        slots(t)[slot] = sentinel()
+        decrement-size(t)
+        true
+    ;Case 3 of 3: Multiple item bucket
+    (s:IntArray) :
+      val n = sizes(t)[slot]
+      val i = num-before(s, n, x)
+      match(index-of-item(s, i, n, x)) :
+        (idx:False) : false
+        (idx:Int) :
+          shift-left(s, idx, n)
+          sizes(t)[slot] = n - 1
+          decrement-size(t)
+          true
+
+;=============================
+;==== Iteration Operation ====
+;=============================
+defmethod to-seq (t:IntSet) :
+  val sizes = sizes(t)
+  val slots = slots(t)
+  generate<Int> :
+    for idx in 0 to length(slots) do :
+      match(slots[idx]) :
+        (s:Sentinel) : false
+        (s:Int) : yield(s)
+        (s:IntArray) : for j in 0 to sizes[idx] do : yield(s[j])
+
+defmethod length (t:IntSet) :
+  size(t)
 
 ;==================================
 ;==== Convenience Constructors ====
