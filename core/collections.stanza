@@ -71,27 +71,15 @@ defn bsearch (less?: (Int, Int) -> True|False, xs:IntArray, n:Int, v:Int) -> Int
 ;                     Interface
 ;                     =========
 
-public lostanza deftype Vector<T> <: IndexedCollection<T> :
-  var size: long
-  var array: ref<Array<T>>
+public defstruct Vector<T> <: IndexedCollection<T> :
+  size: Int with: (setter => set-size, init => 0)
+  array: Array<T> with: (setter => set-array)
+with:
+  constructor => #Vector
 
-public lostanza defn Vector<T> (cap:ref<Int>) -> ref<Vector<T>> :
+public defn Vector<T> (cap:Int) -> Vector<T> :
   core/ensure-non-negative(String("capacity"), cap)
-  return new Vector<T>{0L, Array<T>(cap)}
-
-lostanza defn size (v:ref<Vector>) -> ref<Int> :
-  return new Int{v.size as int}
-
-lostanza defn set-size (v:ref<Vector>, s:ref<Int>) -> ref<False> :
-  v.size = s.value as long
-  return false
-
-lostanza defn array<?T> (v:ref<Vector<?T>>) -> ref<Array<T>> :
-  return v.array
-
-lostanza defn set-array (v:ref<Vector>, a:ref<Array>) -> ref<False> :
-  v.array = a
-  return false
+  #Vector<T>(Array<T>(cap))
 
 public defmulti add<?T> (v:Vector<?T>, value:T) -> False
 public defmulti add-all<?T> (v:Vector<?T>, vs:Seqable<T>) -> False
@@ -252,148 +240,6 @@ defmethod do<?T> (f: T -> ?, v:Vector<?T>) :
      f(a[i])
      loop(i + 1)
 
-;<DOC>
-public defn Vector<T> (cap:Int) -> Vector<T> :
-   core/ensure-non-negative("capacity", cap)
-   var array = Array<T>(cap)
-   var size = 0
-
-   defn set-capacity (c:Int) :
-      val new-array = Array<T>(c)
-      new-array[0 to size] = array
-      array = new-array
-         
-   defn ensure-capacity (c:Int) :
-      val cur-c = length(array)
-      set-capacity(max(c, 2 * cur-c)) when c > cur-c
-
-   new Vector<T> :
-      defmethod get (this, i:Int) :
-         core/ensure-index-in-bounds(this, i)
-         array[i]
-
-      defmethod set (this, i:Int, value:T) :
-         if i == size :
-            add(this, value)
-         else :
-            core/ensure-index-in-bounds(this, i)
-            array[i] = value
-            
-      defmethod set-all (this, r:Range, v:T) :
-         core/ensure-index-range(this, r)
-         set-all(array, r, v)         
-
-      defmethod length (this) :
-         size
-
-      defmethod trim (this) :
-         set-capacity(size)
-
-      defmethod set-length (this, len:Int, value:T) :
-         if len > size : lengthen(this, len, value)
-         else : shorten(this, len)
-
-      defmethod shorten (this, new-size:Int) :
-         #if-not-defined(OPTIMIZE) :
-            core/ensure-non-negative("size", new-size)
-            if new-size > size :
-               fatal("Given size (%_) is larger than current size (%_)." % [new-size, size])
-         size = new-size
-         
-      defmethod lengthen (this, new-size:Int, x:T) :
-         #if-not-defined(OPTIMIZE) :
-            if new-size < size :
-               fatal("Given size (%_) is smaller than current size (%_)." % [new-size, size])
-         ensure-capacity(new-size)
-         set-all(array, size to new-size, x)
-         size = new-size
-
-      defmethod add (this, value:T) :
-         ensure-capacity(size + 1)
-         array[size] = value
-         size = size + 1
-
-      defmethod add-all (this, vs:Seqable<T>) :
-         match(vs) :
-            (vs:Seqable<T> & Lengthable) :
-               val n = length(vs)
-               ensure-capacity(size + n)
-               array[size to (size + n)] = vs
-               size = size + n
-            (vs) :
-               do(add{this, _}, vs)
-
-      defmethod pop (this) :
-         #if-not-defined(OPTIMIZE) :
-            fatal("Empty Vector") when size == 0
-         size = size - 1
-         array[size]
-
-      defmethod peek (this) :
-         #if-not-defined(OPTIMIZE) :
-            fatal("Empty Vector") when size == 0
-         array[size - 1]
-
-      defmethod clear (this) :
-         size = 0
-         
-      defmethod clear (this, n:Int, x0:T) :
-         if length(array) < n :
-            val cap = max(n, 2 * length(array))
-            array = Array<T>(cap, x0)
-            size = n
-         else :
-            set-all(array, 0 to n, x0)
-            size = n         
-
-      defmethod remove-when (f: T -> True|False, this) :
-         for x in this update :
-            if f(x) : None()
-            else : One(x)
-
-      defmethod remove (this, i:Int) :
-         core/ensure-index-in-bounds(this, i)
-         val x = array[i]   
-         for i in i to (size - 1) do :
-            array[i] = array[i + 1]
-         size = size - 1
-         x
-
-      defmethod remove (this, r:Range) :
-         core/ensure-index-range(this, r)
-         val [s,e] = core/range-bound(this, r)
-         val n = e - s
-         if n > 0 :
-            for i in s to (size - n) do :
-               array[i] = array[i + n]
-            size = size - n
-
-      defmethod remove-item (this:Vector<T&Equalable>, x:T&Equalable) :
-         match(index-of(this, x)) :
-            (i:Int) : (remove(this, i), true)
-            (i:False) : false
-
-      defmethod update (f: T -> Maybe<T>, this) :
-         defn* loop (dst:Int, src:Int) :
-            if src < size :
-               match(f(array[src])) :
-                  (x:One<T>) :
-                     array[dst] = value(x)
-                     loop(dst + 1, src + 1)
-                  (x:None) :
-                     loop(dst, src + 1)
-            else :
-               size = dst
-         loop(0, 0)
-
-      defmethod do (f: T -> ?, this) :
-         val n = size
-         let loop (i:Int = 0) :
-            if i < n :
-               f(array[i])
-               loop(i + 1)
-;<DOC>
-
 public defn update<?T> (v:Vector<?T>, f: T -> Maybe<T>) -> False :
   update(f,v)
 
@@ -430,7 +276,6 @@ defmethod print (o:OutputStream, v:Vector) :
 ;                      Interface
 ;                      =========
 
-public deftype Queue<T> <: IndexedCollection<T>
 public defmulti add<?T> (q:Queue<?T>, x:T) -> False
 public defmulti clear (q:Queue) -> False
 public defmulti pop<?T> (q:Queue<?T>) -> T
@@ -439,63 +284,67 @@ public defmulti peek<?T> (q:Queue<?T>) -> T
 ;                    Implementation
 ;                    ==============
 
+public defstruct Queue<T> <: IndexedCollection<T> :
+  cap:Int with: (setter => set-cap)
+  array:Array<T> with: (setter => set-array, init => Array<T>(cap))
+  begin:Int with: (setter => set-begin, init => 0)
+  size:Int with: (setter => set-size, init => 0)
+with:
+  constructor => #Queue
+
 public defn Queue<T> (initial-cap:Int) -> Queue<T> :
-   core/ensure-non-negative("capacity", initial-cap)
-   var cap:Int = next-pow2(initial-cap)
-   var array:Array<T> = Array<T>(cap)
-   var begin:Int = 0
-   var size:Int = 0
+  core/ensure-non-negative("capacity", initial-cap)
+  #Queue<T>(next-pow2(initial-cap))
 
-   defn ensure-capacity (c:Int) :
-      defn set-capacity (c:Int) :
-         val new-array = Array<T>(c)
-         for i in 0 to size do :
-            new-array[i] = array[wrapped-index(i)]
-         array = new-array
-         cap = c
-         begin = 0
-      set-capacity(next-pow2(c)) when c > cap         
+defn ensure-capacity<?T> (q:Queue<?T>, c:Int) :
+  defn set-capacity (c:Int) :
+    val new-array = Array<T>(c)
+    for i in 0 to size(q) do :
+      new-array[i] = array(q)[wrapped-index(q, i)]
+    set-array(q, new-array)
+    set-cap(q, c)
+    set-begin(q, 0)
+  set-capacity(next-pow2(c)) when c > cap(q)
 
-   defn wrapped-index (i:Int) :
-      (begin + i) & (cap - 1)
+defn wrapped-index (q:Queue, i:Int) :
+  (begin(q) + i) & (cap(q) - 1)
 
-   new Queue<T> :
-      defmethod get (this, i:Int) :
-         core/ensure-index-in-bounds(this, i)
-         array[wrapped-index(i)]
-         
-      defmethod set (this, i:Int, value:T) :
-         if i == -1 :
-            add(this, value)
-         else :
-            core/ensure-index-in-bounds(this, i)
-            array[wrapped-index(i)] = value
+defmethod get<?T> (q:Queue<?T>, i:Int) :
+  core/ensure-index-in-bounds(q, i)
+  array(q)[wrapped-index(q, i)]
 
-      defmethod add (this, x:T) :
-         ensure-capacity(size + 1)
-         begin = wrapped-index(-1 + cap)
-         array[begin] = x
-         size = size + 1
+defmethod set<?T> (q:Queue<?T>, i:Int, value:T) :
+  if i == -1 :
+    add(q, value)
+  else :
+    core/ensure-index-in-bounds(q, i)
+    array(q)[wrapped-index(q, i)] = value
 
-      defmethod pop (this) :
-         #if-not-defined(OPTIMIZE) :
-            fatal("Empty Queue") when size == 0
-         size = size - 1
-         array[wrapped-index(size)]
-         
-      defmethod peek (this) :
-         #if-not-defined(OPTIMIZE) :
-            fatal("Empty Queue") when size == 0
-         array[wrapped-index(size - 1)]
+defmethod add<?T> (q:Queue<?T>, x:T) :
+  ensure-capacity(q, size(q) + 1)
+  set-begin(q, wrapped-index(q, -1 + cap(q)))
+  array(q)[begin(q)] = x
+  set-size(q, size(q) + 1)
 
-      defmethod length (this) :
-         size
+defmethod pop (q:Queue) :
+  #if-not-defined(OPTIMIZE) :
+    fatal("Empty Queue") when size(q) == 0
+  set-size(q, size(q) - 1)
+  array(q)[wrapped-index(q, size(q))]
 
-      defmethod clear (this) :
-         size = 0
+defmethod peek (q:Queue) :
+  #if-not-defined(OPTIMIZE) :
+    fatal("Empty Queue") when size(q) == 0
+  array(q)[wrapped-index(q, size(q) - 1)]
+
+defmethod length (q:Queue) :
+  size(q)
+
+defmethod clear (q:Queue) :
+  set-size(q, 0)
 
 public defn Queue<T> () -> Queue<T> :
-   Queue<T>(8)
+  Queue<T>(8)
 
 ;==================================
 ;======== Printer / Writer ========
