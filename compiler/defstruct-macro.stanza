@@ -399,6 +399,7 @@ defn bindings (fields:List<StructField>,
      `updater => updater-name
      `ensure? => choice(not field.ensure.empty?)
      `ensure => field.ensure.value?
+     `ensure-field-initialized => gensym(symbol-join(["ensure-field-" struct-name '-' field.name "-initialized" ]))
      `local-name => local-name
      `local-type => local-type
      `arg-name => arg-name
@@ -477,11 +478,16 @@ defn deftype-and-multis (form:DefStructForm) -> ? :
   val template = `(
 
     ;Type declaration
-    deftype Struct<targs{name}> meta-utils?{
-                                  <: parent?{Parent &}{} core/meta-utils/HasMetaUtils
-                                }{
-                                  parent?{<: Parent}{}
-                                }
+
+    lostanza deftype Struct<targs{name}> meta-utils?{
+                                           <: parent?{Parent &}{} core/meta-utils/HasMetaUtils
+                                         }{
+                                           parent?{<: Parent}{}
+                                         }:
+      fields{
+        setter?{ var }{} name:ref<type>
+      }
+
 
     ;Field multis
     fields{
@@ -518,37 +524,40 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
 
       ;Field getter.
       ;If voidable, then checks that the value is set.
-      defmethod name (this) :
-        voidable?{
-          #if-not-defined(OPTIMIZE) :
-            if local-name is Uninitialized :
-              fatal("Field %_ has not been initialized." % [`qualified-name])
-          local-name as type
-        }{
-          local-name
-        }
+      voidable?{
+        defn ensure-field-initialized (x:type) :
+          ensure-initialized(x, `qualified-name)
+      }{}
 
+      lostanza defmethod name<targs{?name}> (self:ref<Struct<targs{?name}>>) -> ref<type> :
+        voidable?{
+          ensure-field-initialized(self.name)
+          return self.name as type
+        }{
+          return self.name
+        }
 
       ;Field setter.
       ;Ensure that value satisfies preconditions.
       setter?{
-        defmethod setter (this, value:type) :
+        lostanza defmethod setter (self:ref<Struct>, value:ref<type>) -> ref<False> :
           ensure?{
             #if-not-defined(OPTIMIZE) :
               ensure(description, value)
           }{}
-          local-name = value
+          self.name = value
+          return false
       }{}
 
       ;Field updater.
       ;Ensure that value satisfies preconditions.
       updater?{
-        defmethod updater (this, local-name:type) :
+        defmethod updater<targs<?name>> (self:Struct<targs<?name>>, local-name:type) :
           ensure?{
             #if-not-defined(OPTIMIZE) :
-              ensure(description, local-name)
+              ensure(description, name(self))
           }{}
-          MainConstructor<targs{name}>(fields{local-name})
+          MainConstructor<targs{name}>(fields{name(self)})
       }{}
 
     }
@@ -567,14 +576,14 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
 defn printer-and-writer (form:DefStructForm) -> ? :
   val template = `(
     printer?{
-      defmethod print (o:OutputStream, this) :
+      defmethod print (o:OutputStream, self:Struct) :
         val print-items = [
           fields{
             voidable?{
-              if local-name is Uninitialized : "%~ = void" % [`name]
-              else : "%~ = %~" % [`name, local-name]
+              if name(self) is Uninitialized : "%~ = void" % [`name]
+              else : "%~ = %~" % [`name, name(self)]
             }{
-              "%~ = %~" % [`name, local-name]
+              "%~ = %~" % [`name, name(self)]
             }
           }
         ]
@@ -582,20 +591,20 @@ defn printer-and-writer (form:DefStructForm) -> ? :
     }{}
 
     forward-to-writer?{
-      defmethod print (o:OutputStream, this) :
-        write(o, this)
+      defmethod print (o:OutputStream, self:Struct) :
+        write(o, self)
     }{}
     
     writer?{
-      defmethod write (o:OutputStream, this) :
+      defmethod write (o:OutputStream, self:Struct) :
         val write-items = Vector<?>()
         fields{
           init?{}{
             voidable?{
-              if local-name is-not Uninitialized :
-                collections/add(write-items, "%~" % [local-name])
+              if name(self) is-not Uninitialized :
+                collections/add(write-items, "%~" % [name(self)])
             }{
-              collections/add(write-items, "%~" % [local-name])
+              collections/add(write-items, "%~" % [name(self)])
             }
           }
         }
@@ -630,21 +639,14 @@ defn printer-and-writer (form:DefStructForm) -> ? :
 defn main-constructor (form:DefStructForm,
                        main-constructor:Token|Symbol) -> ? :
   val template = `(
-    defn MainConstructor<targs{name}> (fields{name:local-type}) :
+    lostanza defn MainConstructor<targs{name}> (fields{name:ref<type>}) -> ref<Struct<targs{name}>> :
+      return new Struct<targs{name}>{ fields{name} }
+          
+    ;Getters, setters, and updaters for each field.
+    getters-setters-updaters
 
-      ;Define mutable local variables.
-      fields{setter?{
-        var local-name:local-type = name
-      }{}}
-
-      ;Create struct.
-      new Struct<targs{name}> :
-
-        ;Getters, setters, and updaters for each field.
-        getters-setters-updaters
-
-        ;Printer and writer
-        printer-and-writer
+    ;Printer and writer
+    printer-and-writer
   )
 
   splice $ substitute(template, [
@@ -666,23 +668,15 @@ defn main-constructor (form:DefStructForm,
 ;  - No ensures.
 ;  - No inits.
 defn simple-constructor (form:DefStructForm,
+                         lo-constructor:Symbol,
                          constructor:Symbol|Token) -> ? :
 
   val template = `(
 
-    defn Constructor<targs{name}> (fields{init?{}{name:type}}) :
-
-      ;Initialize 'init' fields.
-      fields{
-        init?{
-          voidable?{
-            var name:type
-          }{
-            val name:type = init-value
-          }
-        }{}
-      }
-
+    lostanza defn LoConstructor<targs{name}> (fields{name:ref<type>}) -> ref<Struct<targs{name}>> :
+      return new Struct<targs{name}>{ fields{name} }
+          
+    defn Constructor<targs{name}> (fields{init?{}{name:type}}) -> Struct<targs{name}> :
       ;Check preconditions.
       fields{
         ensure?{
@@ -693,29 +687,28 @@ defn simple-constructor (form:DefStructForm,
           }
         }{}
       }
-
-      ;Define mutable local variables.
-      fields{
-        setter?{
-          voidable?{
-            var local-name:local-type = uninitialized
+      LoConstructor(
+        fields{
+          init?{
+            voidable?{
+              uinitialized
+            }{
+              init-value
+            }
           }{
-            var local-name:type = name
+            name
           }
-        }{}
-      }
-
-      ;Create struct.
-      new Struct<targs{name}> :
-
-        ;Getters, setters, and updaters for each field.
-        getters-setters-updaters
-
-        ;Printer and writer
-        printer-and-writer
+        }
+      )
+          
+    ;Getters etc
+    getters-setters-updaters
+    ;Printer and writer
+    printer-and-writer
   )
 
   splice $ substitute(template, [
+    `LoConstructor => lo-constructor
     `Constructor => constructor
     `getters-setters-updaters => getters-setters-updaters(constructor)
     `printer-and-writer => printer-and-writer(form)])
@@ -924,6 +917,8 @@ defn all-constructors (form:DefStructForm) -> ? :
     (c:True) : form.name
     (c:False) : false
 
+  val lo-constructor-name = gensym(form.name)
+
   ;Generate the name of the main constructor.
   val main-constructor-name = gensym(form.name)
 
@@ -936,7 +931,7 @@ defn all-constructors (form:DefStructForm) -> ? :
   ;Compute the simple constructor.
   val simple-constructor =
     if form.use-simple-constructor? :
-      One(simple-constructor(form, constructor-name as Token|Symbol))
+      One(simple-constructor(form, lo-constructor-name, constructor-name as Token|Symbol))
     else :
       None()
 
@@ -1035,6 +1030,7 @@ public defn compile (form:DefStructForm) -> ? :
     `x => deep(gensym(`x))
     `Uninitialized => deep(`core/Uninitialized)
     `uninitialized => deep(`core/uninitialized)
+    `ensure-initalized => deep(`core/ensure-initialized)
     `deftype-and-multis => deftype-and-multis(form)
     `meta-utils-methods => meta-utils-methods(form)
     `hashable-equalable-methods => hashable-equalable-methods(form)
