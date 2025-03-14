@@ -331,6 +331,8 @@ defn CSE (info:FileInfo|False, msg) :
 defn bindings (fields:List<StructField>,
                struct-name:Symbol|Token) -> Nested :
 
+  val all-field-names = to-tuple(seq({_.name}, fields))
+
   ;Generate the bindings for the given field at index 'index'.
   defn bindings (field:StructField, index:Int) -> Tuple<KeyValue> :
 
@@ -385,6 +387,9 @@ defn bindings (fields:List<StructField>,
       (name:True) : sub-token-item?(field.updater, symbol-join(["sub-", field.name]))
       (name:False) : false
 
+    val prev-names = repeated([`name => all-field-names[0 to index]])
+    val post-names = repeated([`name => all-field-names[(index + 1) to false]])
+
     [`name => field.name
      `type => field.type
      `first? => choice(index == 0)
@@ -408,7 +413,9 @@ defn bindings (fields:List<StructField>,
      `init-value => field.init.value?
      `default? => choice(not field.default.empty?)
      `default-value => field.default.value?
-     `initialized? => initialized?]
+     `initialized? => initialized?
+     `prev-names => prev-names
+     `post-names => post-names]
 
   ;Generate the bindings for each field.
   nested $ to-tuple $
@@ -557,7 +564,7 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
             #if-not-defined(OPTIMIZE) :
               ensure(description, local-name)
           }{}
-          MainConstructor<targs{name}>(fields{local-name})
+          MainConstructor<targs{name}>(prev-names{name(self)} local-name post-names{name(self)})
       }{}
 
     }
@@ -687,7 +694,7 @@ defn simple-constructor (form:DefStructForm,
           }
         }{}
       }
-      LoConstructor(
+      LoConstructor<targs{name}>(
         fields{
           init?{
             voidable?{
