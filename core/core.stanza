@@ -8846,16 +8846,20 @@ defmethod to-seq (r:Range) :
 ;------------- Converting Seq to Core Types -----------------
 ;------------------------------------------------------------
 
+; assumes that n is correct and elts have length n
+lostanza defn Tuple!<?T> (n:ref<Int>, elts:ref<Seq<?T>>) -> ref<Tuple<T>> :
+   val len = n.value
+   val t = new Tuple<T>{len}
+   for (var i:long = 0, i < len, i = i + 1) :
+      t.items[i] = next(elts)
+   return t
+
 public defn to-tuple<?T> (xs:Seqable<?T>) -> Tuple<T> :
    match(xs) :
       (xs:Tuple<T>) :
          xs
       (xs:Seqable<T> & Lengthable) :
-         val n = length(xs)
-         val t = Tuple(n, false as ?)
-         for (x in xs, i in 0 to n) do :
-            t[i] = x
-         t
+         Tuple!(length(xs), to-seq(xs))
       (xs) :
          to-tuple(to-vector<T>(xs))
 
@@ -8881,14 +8885,28 @@ public defn to-list<?T> (xs:Seqable<?T>) -> List<T> :
             else : accum
          loop(length(vec) - 1, List())
 
+; assumes n is correct and elts is correct length
+lostanza defn Array!<T> (n:ref<Int>, elts:ref<Seq<T>>) -> ref<Array<T>> :
+   val len = n.value
+   val a = new Array<T>{len}
+   for (var i:long = 0, i < len, i = i + 1) :
+      a.items[i] = next(elts)
+   return a
+
+; assumes n is correct and elts is correct length
+lostanza defn Array!<T> (n:ref<Int>, elts:ref<IndexedCollection<T>|Tuple<T>>) -> ref<Array<T>> :
+   val len = n.value
+   val a = new Array<T>{len}
+   for (var i:int = 0, i < len, i = i + 1) :
+      a.items[i] = get(elts, new Int{i})
+   return a
+
 public defn to-array<T> (xs:Seqable<T>) -> Array<T> :
   match(xs) :
+    (xs:Seqable<T> & Lengthable) :
+      Array!<T>(length(xs), to-seq(xs))
     (xs:Vector<T>|Tuple<T>|Array<T>) :
-      val n = length(xs)
-      val a = Array<T>(n)
-      for i in 0 to n do :
-        a[i] = xs[i]
-      a
+      Array!<T>(length(xs), xs)
     (xs) :
       to-array<T>(to-vector<T>(xs))
 
