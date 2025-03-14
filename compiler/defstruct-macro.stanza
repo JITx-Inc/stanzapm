@@ -492,7 +492,7 @@ defn deftype-and-multis (form:DefStructForm) -> ? :
                                            parent?{<: Parent}{}
                                          }:
       fields{
-        setter?{ var }{} name:ref<type>
+        setter?{ var }{} name:ref<local-type>
       }
 
 
@@ -646,7 +646,7 @@ defn printer-and-writer (form:DefStructForm) -> ? :
 defn main-constructor (form:DefStructForm,
                        main-constructor:Token|Symbol) -> ? :
   val template = `(
-    lostanza defn MainConstructor<targs{name}> (fields{name:ref<type>}) -> ref<Struct<targs{name}>> :
+    lostanza defn MainConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<Struct<targs{name}>> :
       return new Struct<targs{name}>{ fields{name} }
           
     ;Getters, setters, and updaters for each field.
@@ -680,7 +680,7 @@ defn simple-constructor (form:DefStructForm,
 
   val template = `(
 
-    lostanza defn LoConstructor<targs{name}> (fields{name:ref<type>}) -> ref<Struct<targs{name}>> :
+    lostanza defn LoConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<Struct<targs{name}>> :
       return new Struct<targs{name}>{ fields{name} }
           
     defn Constructor<targs{name}> (fields{init?{}{name:type}}) -> Struct<targs{name}> :
@@ -1030,7 +1030,7 @@ public defn compile (form:DefStructForm) -> ? :
     hashable-equalable-methods
     constructors)
 
-  fill-template(template, [
+  val res = fill-template(template, [
     `Struct => deep(form.name)
     `targs => deep(repeated([`name => form.targs]))
     `fields => deep(/bindings(form.fields, form.name))
@@ -1042,6 +1042,10 @@ public defn compile (form:DefStructForm) -> ? :
     `meta-utils-methods => meta-utils-methods(form)
     `hashable-equalable-methods => hashable-equalable-methods(form)
     `constructors => all-constructors(form)])
+
+  println(res)
+
+  res
 
 ;============================================================
 ;================== Small Utilities =========================
