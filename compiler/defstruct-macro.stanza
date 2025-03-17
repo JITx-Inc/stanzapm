@@ -1,5 +1,5 @@
 #use-added-syntax(dot-operator)
-defpackage stz/defstruct-macro :
+defpackage stz/defclass-macro :
   import core
   import collections
   import macro-utils
@@ -722,7 +722,7 @@ defn simple-constructor (form:DefStructForm,
             voidable?{
               uninitialized
             }{
-              init-value
+              name
             }
           }{
             name
@@ -1065,6 +1065,8 @@ public defn compile (form:DefStructForm) -> ? :
     `hashable-equalable-methods => hashable-equalable-methods(form)
     `constructors => all-constructors(form)])
 
+  ; println(res)
+  
   res
 
 ;============================================================
