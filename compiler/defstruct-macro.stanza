@@ -1,5 +1,5 @@
 #use-added-syntax(dot-operator)
-defpackage stz/defclass-macro :
+defpackage stz/defstruct-macro :
   import core
   import collections
   import macro-utils
@@ -557,7 +557,7 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
       ;Field setter.
       ;Ensure that value satisfies preconditions.
       setter?{
-        lostanza defmethod setter (self:ref<Struct>, value:ref<type>) -> ref<False> :
+        lostanza defmethod setter<targs{?name}> (self:ref<Struct<targs{?name}>>, value:ref<type>) -> ref<False> :
           ensure?{
             #if-not-defined(OPTIMIZE) :
               ensure(description, value)
