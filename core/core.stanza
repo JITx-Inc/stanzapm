@@ -8850,8 +8850,19 @@ defmethod to-seq (r:Range) :
 lostanza defn Tuple!<?T> (n:ref<Int>, elts:ref<Seq<?T>>) -> ref<Tuple<T>> :
    val len = n.value
    val t = new Tuple<T>{len}
+   ;need to initialize first because Seq could cons and cause GC
+   for (var i:long = 0, i < len, i = i + 1) :
+      t.items[i] = false as ref<?>
    for (var i:long = 0, i < len, i = i + 1) :
       t.items[i] = next(elts)
+   return t
+
+; assumes that n is correct and elts have length n
+lostanza defn Tuple!<?T> (n:ref<Int>, elts:ref<IndexedCollection<?T>>) -> ref<Tuple<T>> :
+   val len = n.value
+   val t = new Tuple<T>{len}
+   for (var i:int = 0, i < len, i = i + 1) :
+      t.items[i] = get(elts, new Int{i})
    return t
 
 public defn to-tuple<?T> (xs:Seqable<?T>) -> Tuple<T> :
@@ -8860,6 +8871,8 @@ public defn to-tuple<?T> (xs:Seqable<?T>) -> Tuple<T> :
          xs
       (xs:Seqable<T> & Lengthable) :
          Tuple!(length(xs), to-seq(xs))
+      (xs:IndexedCollection<T>) :
+         Tuple!(length(xs), xs)
       (xs) :
          to-tuple(to-vector<T>(xs))
 
@@ -8890,6 +8903,8 @@ lostanza defn Array!<T> (n:ref<Int>, elts:ref<Seq<T>>) -> ref<Array<T>> :
    val len = n.value
    val a = new Array<T>{len}
    for (var i:long = 0, i < len, i = i + 1) :
+      a.items[i] = false as ref<?>
+   for (var i:long = 0, i < len, i = i + 1) :
       a.items[i] = next(elts)
    return a
 
@@ -8905,7 +8920,7 @@ public defn to-array<T> (xs:Seqable<T>) -> Array<T> :
   match(xs) :
     (xs:Seqable<T> & Lengthable) :
       Array!<T>(length(xs), to-seq(xs))
-    (xs:Vector<T>|Tuple<T>|Array<T>) :
+    (xs:IndexedCollection<T>|Tuple<T>) :
       Array!<T>(length(xs), xs)
     (xs) :
       to-array<T>(to-vector<T>(xs))
