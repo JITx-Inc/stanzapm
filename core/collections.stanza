@@ -466,7 +466,7 @@ defn init<?K,?V> (t:HashTable<?K,?V>, c:Int) :
   set-sizes(t, IntArray(c, 0))
   set-size(t, 0)
 
-defn clear<?K,?V> (t:HashTable<?K,?V>) :
+defmethod clear<?K,?V> (t:HashTable<?K,?V>) :
   set-size(t, 0)
   set-all(slots(t), 0 to false, sentinel())
 
@@ -512,7 +512,7 @@ defn* shift-left<?K,?V> (xs:Array<TableItem<?K,?V>>, i:Int, n:Int) :
   for j in i to (n - 1) do :
     xs[j] = xs[j + 1]    
 
-;Copy to new array with hole in position i
+;Copy to  array with hole in position i
 defn* copy-with-hole<?K,?V> (t:HashTable<?K,?V>, xs:Array<TableItem<K,V>>, i:Int, n:Int) :
   val xs* = Array<TableItem<K,V>>(length(xs) * 2)
   xs*[0 to i] = xs[0 to i]
@@ -875,7 +875,7 @@ defn init<?V> (t:IntTable<?V>, c:Int) :
   set-sizes(t, IntArray(c, 0))
   set-size(t, 0)
 
-defn clear<?V> (t:IntTable<?V>) :
+defmethod clear<?V> (t:IntTable<?V>) :
   set-size(t, 0)
   set-all(slots(t), 0 to false, sentinel())
 
@@ -1073,7 +1073,7 @@ defmethod get<?V> (t:IntTable<?V>, k:Int) :
 ;==========================
 ;==== Update Operation ====
 ;==========================
-defn update<?V> (t:IntTable<?V>, f:V -> V, k:Int) :
+defmethod update<?V> (t:IntTable<?V>, f:V -> V, k:Int) :
   defn item (v:V) : IntItem<V>(k,v)
   val slot = loc(t, k)
   match(slots(t)[slot]) :
@@ -1113,7 +1113,7 @@ defn update<?V> (t:IntTable<?V>, f:V -> V, k:Int) :
 ;========================
 ;==== Key? Operation ====
 ;========================
-defn key?<?V> (t:IntTable<?V>, k:Int) :
+defmethod key?<?V> (t:IntTable<?V>, k:Int) :
   val slot = loc(t, k)
   match(slots(t)[slot]) :
     ;Case 1 of 3: Unoccupied bucket
@@ -1129,7 +1129,7 @@ defn key?<?V> (t:IntTable<?V>, k:Int) :
 ;==========================
 ;==== Remove Operation ====
 ;==========================
-defn remove<?V> (t:IntTable<?V>, k:Int) :
+defmethod remove<?V> (t:IntTable<?V>, k:Int) :
   val slot = loc(t, k)
   match(slots(t)[slot]) :
     ;Case 1 of 3: Unoccupied bucket
@@ -1228,6 +1228,7 @@ defmethod print (o:OutputStream, t:IntTable) :
     lnprint(o, Indented(entry))
   print(o, ")")
 
+
 ;============================================================
 ;======================== Sets ==============================
 ;============================================================
@@ -1279,7 +1280,7 @@ defn init<?K> (t:HashSet<?K>, c:Int) :
   set-sizes(t, IntArray(c, 0))
   set-size(t, 0)
 
-defn clear<?K> (t:HashSet<?K>) :
+defmethod clear<?K> (t:HashSet<?K>) :
   set-size(t, 0)
   set-all(slots(t), 0 to false, sentinel())
 
@@ -1585,8 +1586,9 @@ defn decrement-size (t:IntSet) :
   set-size(t, length(t) - 1)
 
 defn increase-capacity (t:IntSet) :
+  val s = to-seq(t)
   init(t, cap(t) * 2)
-  do(add{t, _}, to-seq(t))
+  do(add{t, _}, s)
 
 defn create-bucket (t:IntSet, slot:Int, x0:Int, x1:Int) :
   val bucket = IntArray(4)
