@@ -14,7 +14,7 @@ lostanza defmethod run (a:ref<Autofree>) -> ref<False> :
       StablePrimArray in [StableByteArray StableIntArray StableLongArray StableFloatArray StableDoubleArray]
       x0 in [0Y 0 0L 0.0f 0.0]) :
 
-  public lostanza deftype StablePrimArray <: Array<Prim> & Unique :
+  public lostanza deftype StablePrimArray <: Arrayable<Prim> & Unique :
     length: long
     data: ptr<prim>
 

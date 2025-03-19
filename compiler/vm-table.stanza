@@ -363,7 +363,7 @@ public lostanza defn load-data (vmt:ref<VMTable>, d:ref<VMData>) -> ref<False> :
 public defn load-datas (vmt:VMTable, ds:Tuple<VMData>) :
   do(load-data{vmt, _}, ds)
 
-lostanza defn non-negative? (xs:ref<Array<Int>>, i:ref<Int>) -> long :
+lostanza defn non-negative? (xs:ref<StableIntArray>, i:ref<Int>) -> long :
   val l = length(xs).value
   if i.value < l :
     if get(xs,i).value >= 0 : return 1L

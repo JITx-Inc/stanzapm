@@ -191,9 +191,9 @@ defn dnf-form (term:Term) -> Term :
       (t) : [t]
 
   ;Permutations
-  defn permutations (return:Array<Int> -> ?, lengths:Tuple<Int>) :
+  defn permutations (return:IntArray -> ?, lengths:Tuple<Int>) :
     val dims = length(lengths)
-    val indices = Array<Int>(dims, 0)
+    val indices = IntArray(dims, 0)
     let loop (d:Int = 0) :
       if d < dims :
         for i in 0 to lengths[d] do :
@@ -203,7 +203,7 @@ defn dnf-form (term:Term) -> Term :
         return(indices)
 
   ;Retrieve the given indices in the given term tuple.
-  defn gather-intersection-vars (termss:Tuple<Tuple<Term>>, indices:Array<Int>) -> Seq<Term> :
+  defn gather-intersection-vars (termss:Tuple<Tuple<Term>>, indices:IntArray) -> Seq<Term> :
     for (i in indices, terms in termss) seq-cat :
       match(terms[i]) :
         (t:Intersection) : /terms(t)
