@@ -88,16 +88,16 @@ public defn PerfectHashTable<?T> (entries0:Collection<KeyValue<Int,?T>> & Length
 
   ;Hold buckets and sorted bucket indices
   var buckets:Array<List<KeyValue<Int,T>>>
-  var bucket-indices:Array<Int>
-  var dtable:Array<Int>
+  var bucket-indices:IntArray
+  var dtable:IntArray
   var etable:Array<KeyValue<Int,T>|False>
 
   ;Put all entries in buckets
   defn put-in-buckets (d0:Int) :
     ;Initialize all tables
     buckets = Array<List<KeyValue<Int,T>>>(n, List())
-    bucket-indices = to-array<Int>(0 to n)
-    dtable = Array<Int>(n, 0)
+    bucket-indices = to-intarray(0 to n)
+    dtable = IntArray(n, 0)
     etable = Array<KeyValue<Int,T>|False>(n, false)
 
     ;Put in buckets

@@ -261,7 +261,7 @@ public defn strong-components<?T> (graph: Seqable<KeyValue<?T&Hashable&Equalable
 ;==================== BitArrays =============================
 ;============================================================
 
-public lostanza deftype BitArray <: Array<True|False> :
+public lostanza deftype BitArray <: Arrayable<True|False> :
    words: long
    length: long
    var bits: long ...

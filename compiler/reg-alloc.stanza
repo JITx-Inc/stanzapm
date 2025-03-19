@@ -1043,7 +1043,7 @@ defn unused-regs (used:Seqable<Loc>, num:Int, backend:Backend) -> Vector<Reg> :
 
 defn remove-critical-edges () :
   ;Count predecessors
-  val num-preds-table = Array<Int>(nblocks(),0)
+  val num-preds-table = IntArray(nblocks(),0)
   for (b in BLOCKS, i in 0 to false) do :
     for n in next(b) do :
       num-preds-table[n] = 1 + num-preds-table[n]
@@ -1171,8 +1171,8 @@ defn liveness-analysis () :
   ;Propagate liveness
   clear(IN-PORTS, nblocks(), List())
   clear(OUT-PORTS, nblocks(), List())
-  val in-dists = Array<Int>(nblocks(), INT-MAX)
-  val out-dists = Array<Int>(nblocks(), INT-MAX)
+  val in-dists = IntArray(nblocks(), INT-MAX)
+  val out-dists = IntArray(nblocks(), INT-MAX)
   val in-dirty = Vector<Int>()
   val out-dirty = Vector<Int>()
 
@@ -1198,8 +1198,8 @@ defn liveness-analysis () :
 
 ;Mark that variable v is live-in to block b with distance d
 lostanza defn mark-live-in (defs:ref<BitMatrix>,
-                            in-dists:ref<Array<Int>>,
-                            out-dists:ref<Array<Int>>,
+                            in-dists:ref<IntArray>,
+                            out-dists:ref<IntArray>,
                             in-dirty:ref<Vector<Int>>,
                             out-dirty:ref<Vector<Int>>,
                             b:ref<Int>,
@@ -1230,8 +1230,8 @@ lostanza defn mark-live-in (defs:ref<BitMatrix>,
 
 ;Mark that variable v is live-out from block b with distance d
 lostanza defn mark-live-out (defs:ref<BitMatrix>,
-                             in-dists:ref<Array<Int>>,
-                             out-dists:ref<Array<Int>>,
+                             in-dists:ref<IntArray>,
+                             out-dists:ref<IntArray>,
                              in-dirty:ref<Vector<Int>>,
                              out-dirty:ref<Vector<Int>>,
                              b:ref<Int>,
@@ -2011,8 +2011,8 @@ defn stack-intervals () -> Seq<Interval> :
   ;========================
   ;==== Port Positions ====
   ;========================
-  val in-port-pos = Array<Int>(nblocks())
-  val out-port-pos = Array<Int>(nblocks())
+  val in-port-pos = IntArray(nblocks())
+  val out-port-pos = IntArray(nblocks())
   val num-pos = let :
     val pos-counter = Counter(0)
     for (blk in BLOCKS, b in 0 to false) do :
@@ -2023,8 +2023,8 @@ defn stack-intervals () -> Seq<Interval> :
   ;===========================
   ;==== Interval Tracking ====
   ;===========================
-  val var-start = Array<Int>(nvars(), INT-MAX)
-  val var-end = Array<Int>(nvars(), INT-MIN)
+  val var-start = IntArray(nvars(), INT-MAX)
+  val var-end = IntArray(nvars(), INT-MIN)
 
   defn note-usage (v:Int, i:Int) :
     var-start[v] = min(i, var-start[v])
@@ -2414,7 +2414,7 @@ defn collapse-blocks () :
   ;======================
   ;==== Block Labels ====
   ;======================
-  val lbls = Array<Int>(nblocks())
+  val lbls = IntArray(nblocks())
   lbls[0 to false] = repeatedly(unique-id{})
 
   ;===================
