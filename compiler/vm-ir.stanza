@@ -38,40 +38,20 @@ public val NUM-BUILTIN-FNS = 4
 ;================== Design of Instructions ==================
 ;============================================================
 
-public deftype VMPackage
-public defmulti packageio (p:VMPackage) -> PackageIO
-public defmulti init (p:VMPackage) -> Int|False
-public defmulti globals (p:VMPackage) -> Tuple<VMGlobal>
-public defmulti sub-globals (p:VMPackage, g:Tuple<VMGlobal>) -> VMPackage
-public defmulti datas (p:VMPackage) -> Tuple<VMData>
-public defmulti sub-datas (p:VMPackage, g:Tuple<VMData>) -> VMPackage
-public defmulti consts (p:VMPackage) -> Tuple<VMConst>
-public defmulti classes (p:VMPackage) -> Tuple<VMClass>
-public defmulti funcs (p:VMPackage) -> Tuple<VMDefn>
-public defmulti sub-funcs (p:VMPackage, g:Tuple<VMDefn>) -> VMPackage
-public defmulti methods (p:VMPackage) -> Tuple<VMMethod>
-public defmulti externs (p:VMPackage) -> Tuple<VMExtern>
-public defmulti extern-defns (p:VMPackage) -> Tuple<VMExternDefn>
-public defmulti debug-name-table (p:VMPackage) -> VMDebugNameTable
-public defmulti debug-table (p:VMPackage) -> VMDebugInfoTable
-public defmulti safepoint-table (p:VMPackage) -> VMSafepointTable
-
-public defstruct #VMPackage <: VMPackage :
-  packageio: PackageIO with: (as-method => true)
-  init: Int|False with: (as-method => true)
-  globals: Tuple<VMGlobal> with: (updater => sub-globals, as-method => true)
-  datas: Tuple<VMData> with: (updater => sub-datas, as-method => true)
-  consts: Tuple<VMConst> with: (as-method => true)
-  classes: Tuple<VMClass> with: (as-method => true)
-  funcs: Tuple<VMDefn> with: (updater => sub-funcs, as-method => true)
-  methods: Tuple<VMMethod> with: (as-method => true)
-  externs: Tuple<VMExtern> with: (as-method => true)
-  extern-defns: Tuple<VMExternDefn> with: (as-method => true)
-  debug-name-table: VMDebugNameTable with: (as-method => true)
-  debug-table: VMDebugInfoTable with: (as-method => true)
-  safepoint-table: VMSafepointTable with: (as-method => true)
-with:
-  constructor => VMPackage
+public defstruct VMPackage :
+  packageio: PackageIO
+  init: Int|False
+  globals: Tuple<VMGlobal> with: (updater => sub-globals)
+  datas: Tuple<VMData> with: (updater => sub-datas)
+  consts: Tuple<VMConst>
+  classes: Tuple<VMClass>
+  funcs: Tuple<VMDefn> with: (updater => sub-funcs)
+  methods: Tuple<VMMethod>
+  externs: Tuple<VMExtern>
+  extern-defns: Tuple<VMExternDefn>
+  debug-name-table: VMDebugNameTable
+  debug-table: VMDebugInfoTable
+  safepoint-table: VMSafepointTable
 
 ;A value that can be accessed directly within an instruction.
 public deftype VMImm
@@ -154,20 +134,10 @@ public defstruct VMDef :
   type: VMType
   local: Int with: (default => 0, updater => sub-local)
 
-public deftype VMDefn
-public defmulti id (d:VMDefn) -> Int
-public defmulti sub-id (d:VMDefn, id:Int) -> VMDefn
-public defmulti dependencies (d:VMDefn) -> Tuple<Int>
-public defmulti sub-dependencies (d:VMDefn, dependencies:Tuple<Int>) -> VMDefn
-public defmulti func (d:VMDefn) -> VMFunction
-public defmulti sub-func (d:VMDefn, func:VMFunction) -> VMDefn
-
-public defstruct #VMDefn <: VMDefn :
-  id: Int with: (updater => sub-id, as-method => true)
-  dependencies: Tuple<Int> with: (default => [], updater => sub-dependencies, as-method => true)
-  func: VMFunction with: (updater => sub-func, as-method => true)
-with:
-  constructor => VMDefn
+public defstruct VMDefn :
+  id: Int with: (updater => sub-id)
+  dependencies: Tuple<Int> with: (default => [], updater => sub-dependencies)
+  func: VMFunction with: (updater => sub-func)
 
 ;Indicates that the function 'fid' is called externally.
 ;- lbl: If given, the static label of this function. When statically-compiled,
