@@ -490,11 +490,13 @@ defn deftype-and-multis (form:DefStructForm) -> ? :
 
     ;Type declaration
 
-    lostanza deftype Struct<targs{name}> meta-utils?{
+    deftype Struct<targs{name}> meta-utils?{
                                            <: parent?{Parent &}{} core/meta-utils/HasMetaUtils
                                          }{
                                            parent?{<: Parent}{}
-                                         }:
+                                         }
+
+    lostanza deftype LoStruct<targs{name}> <: Struct<targs{name}> :
       fields{
         setter?{ var }{} name:ref<local-type>
       }
@@ -539,7 +541,7 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
         val ensure-field-initialized-qualified-name = `qualified-name
       }{}
 
-      lostanza defmethod name<targs{?name}> (self:ref<Struct<targs{?name}>>) -> ref<type> :
+      lostanza defmethod name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type> :
         voidable?{
           #if-not-defined(OPTIMIZE) :
             if self.name == core/uninitialized :
@@ -550,14 +552,14 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
         }
 
       voidable-with-printer-or-writer?{
-        lostanza defn raw-name<targs{?name}> (self:ref<Struct<targs{?name}>>) -> ref<type|Uninitialized> :
+        lostanza defn raw-name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type|Uninitialized> :
           return self.name
       }{}
 
       ;Field setter.
       ;Ensure that value satisfies preconditions.
       setter?{
-        lostanza defmethod setter<targs{?name}> (self:ref<Struct<targs{?name}>>, value:ref<type>) -> ref<False> :
+        lostanza defmethod setter<targs{?name}> (self:ref<LoStruct<targs{?name}>>, value:ref<type>) -> ref<False> :
           ensure?{
             #if-not-defined(OPTIMIZE) :
               ensure(description, value)
@@ -570,7 +572,7 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
       ;Ensure that value satisfies preconditions.
       updater?{
         val description-val = description
-        lostanza defmethod updater<targs{?name}> (self:ref<Struct<targs{?name}>>, local-name:ref<type>) -> ref<Struct<targs{name}>> :
+        lostanza defmethod updater<targs{?name}> (self:ref<LoStruct<targs{?name}>>, local-name:ref<type>) -> ref<LoStruct<targs{name}>> :
           ensure?{
             #if-not-defined(OPTIMIZE) :
               ensure(description-val, local-name)
@@ -657,8 +659,8 @@ defn printer-and-writer (form:DefStructForm) -> ? :
 defn main-constructor (form:DefStructForm,
                        main-constructor:Token|Symbol) -> ? :
   val template = `(
-    lostanza defn MainConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<Struct<targs{name}>> :
-      return new Struct<targs{name}>{ fields{name} }
+    lostanza defn MainConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<LoStruct<targs{name}>> :
+      return new LoStruct<targs{name}>{ fields{name} }
           
     ;Getters, setters, and updaters for each field.
     getters-setters-updaters
@@ -691,10 +693,10 @@ defn simple-constructor (form:DefStructForm,
 
   val template = `(
 
-    lostanza defn LoConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<Struct<targs{name}>> :
-      return new Struct<targs{name}>{ fields{name} }
+    lostanza defn LoConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<LoStruct<targs{name}>> :
+      return new LoStruct<targs{name}>{ fields{name} }
           
-    defn Constructor<targs{name}> (fields{init?{}{local-name:type}}) -> Struct<targs{name}> :
+    defn Constructor<targs{name}> (fields{init?{}{local-name:type}}) -> LoStruct<targs{name}> :
       ;Initialize 'init' fields.
       fields{
         init?{
@@ -1052,8 +1054,11 @@ public defn compile (form:DefStructForm) -> ? :
     hashable-equalable-methods
     constructors)
 
+  val lo-name = gensym(form.name)
+
   val res = fill-template(template, [
     `Struct => deep(form.name)
+    `LoStruct => deep(lo-name)
     `targs => deep(repeated([`name => form.targs]))
     `fields => deep(/bindings(form, form.fields, form.name))
     `x => deep(gensym(`x))
