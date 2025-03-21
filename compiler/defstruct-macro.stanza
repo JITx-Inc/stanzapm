@@ -496,7 +496,7 @@ defn deftype-and-multis (form:DefStructForm) -> ? :
                                            parent?{<: Parent}{}
                                          }
 
-    lostanza deftype LoStruct<targs{name}> <: Struct<targs{name}> :
+    private lostanza deftype LoStruct<targs{name}> <: Struct<targs{name}> :
       fields{
         setter?{ var }{} name:ref<local-type>
       }
@@ -693,7 +693,7 @@ defn simple-constructor (form:DefStructForm,
 
   val template = `(
 
-    lostanza defn LoConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<LoStruct<targs{name}>> :
+    private lostanza defn LoConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<LoStruct<targs{name}>> :
       return new LoStruct<targs{name}>{ fields{name} }
           
     defn Constructor<targs{name}> (fields{init?{}{local-name:type}}) -> LoStruct<targs{name}> :
