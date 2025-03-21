@@ -61,7 +61,7 @@ public defstruct LinkerInput :
   auxfile:AuxFile
 
 ;The set of callbacks for performing the necessary actions.
-public defstruct LinkerEnv
+public deftype LinkerEnv
 
 ;Report to the caller that an error has occurred.
 public defmulti issue-error (e:LinkerEnv, err:LinkingError) -> False
