@@ -434,14 +434,14 @@ defn bindings (form:DefStructForm,
 defn meta-utils-methods (form:DefStructForm) -> ? :
   val template = `(
     meta-utils?{
-      defmethod core/meta-utils/field-values (x:Struct) :
+      defmethod core/meta-utils/field-values (x:LoStruct) :
         [fields{name(x)}]
-      defmethod core/meta-utils/field-names (x:Struct) :
+      defmethod core/meta-utils/field-names (x:LoStruct) :
         [fields{`name}]
-      defmethod core/meta-utils/field-accessors (x:Struct) :
-        val accessors = [fields{name upcast-as (Struct -> ?)}]
+      defmethod core/meta-utils/field-accessors (x:LoStruct) :
+        val accessors = [fields{name upcast-as (LoStruct -> ?)}]
         accessors as Tuple<(core/meta-utils/HasMetaUtils -> ?)>
-      defmethod core/meta-utils/field-entries (x:Struct) :
+      defmethod core/meta-utils/field-entries (x:LoStruct) :
         [fields{`name => name(x)}]
     }{}
   )
@@ -456,7 +456,7 @@ defn meta-utils-methods (form:DefStructForm) -> ? :
 defn hashable-equalable-methods (form:DefStructForm) -> ? :
   val template = `(
     equalable?{
-      defmethod equal? (lhs:Struct, rhs:Struct) :
+      defmethod equal? (lhs:LoStruct, rhs:LoStruct) :
         has-fields?{
           fields{first?{}{and} equal?(name(lhs), name(rhs))}
         }{
@@ -465,7 +465,7 @@ defn hashable-equalable-methods (form:DefStructForm) -> ? :
     }{}
 
     hashable?{
-      defmethod hash (x:Struct) :
+      defmethod hash (x:LoStruct) :
         hash([Struct-name fields{name(x)}])
     }{}
   )
@@ -596,7 +596,7 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
 defn printer-and-writer (form:DefStructForm) -> ? :
   val template = `(
     printer?{
-      defmethod print (o:OutputStream, self:Struct) :
+      defmethod print (o:OutputStream, self:LoStruct) :
         val print-items = [
           fields{
             voidable?{
@@ -611,12 +611,12 @@ defn printer-and-writer (form:DefStructForm) -> ? :
     }{}
 
     forward-to-writer?{
-      defmethod print (o:OutputStream, self:Struct) :
+      defmethod print (o:OutputStream, self:LoStruct) :
         write(o, self)
     }{}
     
     writer?{
-      defmethod write (o:OutputStream, self:Struct) :
+      defmethod write (o:OutputStream, self:LoStruct) :
         val write-items = Vector<?>()
         fields{
           init?{}{
@@ -700,7 +700,9 @@ defn simple-constructor (form:DefStructForm,
       ;Initialize 'init' fields.
       fields{
         init?{
-          val name:type = init-value
+          voidable?{}{
+            val name:type = init-value
+          }
         }{
           setter?{
             val name:type = local-name
