@@ -39,6 +39,7 @@ public defstruct DefStructForm :
   equalable?: True|False
   hashable?: True|False
   meta-utils?: True|False
+  lo-type:Token|Symbol|False|True
 
 ;Represents a field declaration in a DefStruct.
 ;- name: The name of the field.
@@ -80,6 +81,7 @@ public defstruct ForwardToWriter
 ;Listing of all supported struct options.
 public deftype StructOption
 public defstruct Constructor <: StructOption: (value:Token|True|False|Symbol)
+public defstruct LoType <: StructOption: (value:Token|False|True|Symbol)
 public defstruct KeywordConstructor <: StructOption: (value:Token|True|False|Symbol)
 public defstruct GenPrinter <: StructOption: (value:True|False)
 public defstruct GenWriter <: StructOption: (value:True|False)
@@ -110,6 +112,7 @@ defn name (o:FieldOption) -> Symbol :
 defn name (o:StructOption) -> Symbol :
   match(o) :
     (o:Constructor) : `constructor
+    (o:LoType) : `lo-type
     (o:KeywordConstructor) : `keyword-constructor
     (o:GenPrinter) : `printer
     (o:GenWriter) : `writer
@@ -180,6 +183,7 @@ public defn DefStructForm (info:FileInfo|False,
 
   ;Process the options.
   var constructor = true
+  var lo-type = false
   var keyword-constructor = false
   var printer? = None()
   var writer? = false
@@ -189,6 +193,7 @@ public defn DefStructForm (info:FileInfo|False,
   for o in options :
     match(o) :
       (o:Constructor) : constructor = o.value
+      (o:LoType) : lo-type = o.value
       (o:KeywordConstructor) : keyword-constructor = o.value
       (o:GenPrinter) : printer? = One(o.value)
       (o:GenWriter) : writer? = o.value
@@ -228,7 +233,8 @@ public defn DefStructForm (info:FileInfo|False,
                 writer?,
                 equalable?,
                 hashable?,
-                meta-utils?)
+                meta-utils?,
+                lo-type)
 
 ;============================================================
 ;====================== Parsing =============================
@@ -267,6 +273,7 @@ defsyntax defstruct-syntax :
   ;Syntax of each option.
   defproduction struct-option!:StructOption
   defrule struct-option! = (constructor ?name:#bool-id-setting) : Constructor(name)
+  defrule struct-option! = (lo-type ?name:#bool-id-setting) : LoType(name)
   defrule struct-option! = (keyword-constructor ?name:#bool-id-setting) : KeywordConstructor(name)
   defrule struct-option! = (printer ?v:#bool-setting) : GenPrinter(v)
   defrule struct-option! = (writer ?v:#bool-setting) : GenWriter(v)
@@ -1056,7 +1063,10 @@ public defn compile (form:DefStructForm) -> ? :
     hashable-equalable-methods
     constructors)
 
-  val lo-name = gensym(form.name)
+  val lo-name =
+    match(form.lo-type) :
+      (name:Symbol|Token) : name
+      (name) : symbol-join $ ["Lo" form.name]
 
   val res = fill-template(template, [
     `Struct => deep(form.name)
