@@ -55,4 +55,4 @@ ${STANZA} compile-macros \
   compiler/dot-macro.stanza \
   -o bootstrap.macros 
 
-${STANZA} core/stanza.proj compiler/stanza.proj stz/driver -o stanzatemp -macros bootstrap.macros -flags BOOTSTRAP -build-from-source
+${STANZA} core/stanza.proj compiler/stanza.proj stz/driver -o stanzatemp -macros bootstrap.macros -flags BOOTSTRAP -build-from-source -optimize
