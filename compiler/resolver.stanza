@@ -1064,7 +1064,7 @@ defn SymbolTable (package-name:Symbol, base:NameMap|Tuple<Export>) :
 
   ; Helper for adding VEntries to collection only if they have not
   ;   already been added
-  defn add-unique<?E> (e:?E&Equalable, entries:List<E&Equalable>) -> List<E> :
+  defn add-unique<?E> (e:?E&Equalable, entries:List<?E&Equalable>) -> List<E> :
     if contains?(entries, e) : entries
     else : cons(e, entries)
 

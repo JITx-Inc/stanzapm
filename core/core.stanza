@@ -4292,6 +4292,9 @@ defn ensure-divide-non-zero (i:Long) :
   #if-defined(OPTIMIZE) : (false)
   #else : (fatal("Cannot divide by zero.") when i == 0L)
 
+protected defn uninitialized-field-error (name:Symbol) :
+  fatal("Field %_ has not been initialized." % [name])
+
 protected defn ensure-index-in-bounds (xs:Lengthable, i:Int) :
   #if-defined(OPTIMIZE) :
     false
