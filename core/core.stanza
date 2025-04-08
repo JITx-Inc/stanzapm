@@ -7543,10 +7543,16 @@ public defn Array<T> (n:Int, x:T) -> Array<T> :
 public defn Array<T> (n:Int) -> Array<T> :
   Array*<T>(n, sentinel)
 
+defn ensure-not-sentinel (value, i:Int) :
+  match(value:Sentinel) : fatal("Index (%_) is uninitialized." % [i])
+
 lostanza defmethod get<?T> (a:ref<Array<?T>>, i:ref<Int>) -> ref<T> :
   #if-not-defined(OPTIMIZE) :
     core/ensure-index-in-bounds(a, i)
-  return a.items[i.value]
+  val res = a.items[i.value]
+  #if-not-defined(OPTIMIZE) :
+    ensure-not-sentinel(res, i)
+  res
 
 lostanza defmethod set<?T> (a:ref<Array<?T>>, i:ref<Int>, v:ref<?T>) -> ref<False> :
   #if-not-defined(OPTIMIZE) :

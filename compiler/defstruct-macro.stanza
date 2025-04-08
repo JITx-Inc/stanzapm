@@ -563,13 +563,19 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
           return self.name
       }{}
 
+      ensure?{
+        val description-val = description
+      }{}
+      
       ;Field setter.
       ;Ensure that value satisfies preconditions.
       setter?{
         lostanza defmethod setter<targs{?name}> (self:ref<LoStruct<targs{?name}>>, value:ref<type>) -> ref<False> :
           ensure?{
             #if-not-defined(OPTIMIZE) :
-              ensure(description, value)
+              prev-names{ val name = self.name }
+              post-names{ val name = self.name }
+              ensure(description-val, value)
           }{}
           self.name = value
           return false
@@ -578,10 +584,11 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
       ;Field updater.
       ;Ensure that value satisfies preconditions.
       updater?{
-        val description-val = description
         lostanza defmethod updater<targs{?name}> (self:ref<LoStruct<targs{?name}>>, local-name:ref<type>) -> ref<LoStruct<targs{name}>> :
           ensure?{
             #if-not-defined(OPTIMIZE) :
+              prev-names{ val name = self.name }
+              post-names{ val name = self.name }
               ensure(description-val, local-name)
           }{}
           return MainConstructor<targs{name}>(prev-names{self.name} local-name post-names{self.name})
@@ -1082,7 +1089,7 @@ public defn compile (form:DefStructForm) -> ? :
     `hashable-equalable-methods => hashable-equalable-methods(form)
     `constructors => all-constructors(form)])
 
-  ; println(res)
+  println(res)
   
   res
 
