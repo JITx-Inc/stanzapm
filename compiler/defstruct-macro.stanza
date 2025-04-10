@@ -340,6 +340,7 @@ defn bindings (form:DefStructForm,
                struct-name:Symbol|Token) -> Nested :
 
   val all-field-names = to-tuple(seq({_.name}, fields))
+  val all-raw-names = to-tuple(seq({ gensym(symbol-join(["raw-" _.name])) }, fields))
 
   ;Generate the bindings for the given field at index 'index'.
   defn bindings (field:StructField, index:Int) -> Tuple<KeyValue> :
@@ -395,21 +396,21 @@ defn bindings (form:DefStructForm,
       (name:True) : sub-token-item?(field.updater, symbol-join(["sub-", field.name]))
       (name:False) : false
 
-    val prev-names = repeated([`name => all-field-names[0 to index]])
-    val post-names = repeated([`name => all-field-names[(index + 1) to false]])
+    val prev-names = repeated([`name => all-field-names[0 to index], `raw-name => all-raw-names[0 to index]])
+    val post-names = repeated([`name => all-field-names[(index + 1) to false], `raw-name => all-raw-names[(index + 1) to false]])
 
     [`name => field.name
-     `raw-name => gensym(symbol-join(["raw-" field.name]))
+     `raw-name => all-raw-names[index]
      `type => field.type
      `first? => choice(index == 0)
      `doc-string => field.doc-string.value?
      `doc-string? => choice(not field.doc-string.empty?)
-     `description-val => gensym(symbol-join(["ensure-field-" struct-name '-' field.name "-initialized" ]))
      `description => to-string("field %_/%_" % [struct-name, field.name])
      `qualified-name => symbol-join([struct-name '/' field.name])
      `method? => choice(field.as-method?)
      `setter? => choice(not field.setter.false?)
      `setter => setter-name
+     `lo-setter => gensym(symbol-join(["lo-" setter-name]))
      `updater? => choice(not field.updater.false?)
      `updater => updater-name
      `ensure? => choice(not field.ensure.empty?)
@@ -545,53 +546,51 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
       ;Field getter.
       ;If voidable, then checks that the value is set.
       voidable?{
-        val ensure-field-initialized-qualified-name = `qualified-name
-      }{}
-
-      lostanza defmethod name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type> :
-        voidable?{
-          #if-not-defined(OPTIMIZE) :
-            if self.name == core/uninitialized :
-              uninitialized-field-error(ensure-field-initialized-qualified-name)
-          return self.name as ref<type>
-        }{
+        private lostanza defn raw-name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type|Uninitialized> :
           return self.name
+      }{
+        private lostanza defn raw-name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type> :
+          return self.name
+      }
+
+      defmethod name<targs{?name}> (self:LoStruct<targs{?name}>) -> type :
+        voidable?{
+          val local-name = raw-name(self)
+          #if-not-defined(OPTIMIZE) :
+            if local-name is Uninitialized :
+              fatal("Field %_ has not been initialized." % [`qualified-name])
+          local-name as type
+        }{
+          raw-name(self)
         }
 
-      voidable-with-printer-or-writer?{
-        lostanza defn raw-name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type|Uninitialized> :
-          return self.name
-      }{}
-
-      ensure?{
-        val description-val = description
-      }{}
-      
       ;Field setter.
       ;Ensure that value satisfies preconditions.
       setter?{
-        lostanza defmethod setter<targs{?name}> (self:ref<LoStruct<targs{?name}>>, value:ref<type>) -> ref<False> :
-          ensure?{
-            #if-not-defined(OPTIMIZE) :
-              prev-names{ val name = self.name }
-              post-names{ val name = self.name }
-              ensure(description-val, value)
-          }{}
+        private lostanza defn lo-setter<targs{?name}> (self:ref<LoStruct<targs{?name}>>, value:ref<type>) -> ref<False> :
           self.name = value
           return false
+        defmethod setter<targs{?name}> (self:LoStruct<targs{?name}>, value:type) -> False :
+          ensure?{
+            #if-not-defined(OPTIMIZE) :
+              prev-names{ val name = raw-name(self) }
+              post-names{ val name = raw-name(self) }
+              ensure(description, value)
+          }{}
+          lo-setter(self, value)
       }{}
 
       ;Field updater.
       ;Ensure that value satisfies preconditions.
       updater?{
-        lostanza defmethod updater<targs{?name}> (self:ref<LoStruct<targs{?name}>>, local-name:ref<type>) -> ref<LoStruct<targs{name}>> :
+        defmethod updater<targs{?name}> (self:LoStruct<targs{?name}>, local-name:type) -> LoStruct<targs{name}> :
           ensure?{
             #if-not-defined(OPTIMIZE) :
-              prev-names{ val name = self.name }
-              post-names{ val name = self.name }
-              ensure(description-val, local-name)
+              prev-names{ val name = raw-name(self) }
+              post-names{ val name = raw-name(self) }
+              ensure(description, local-name)
           }{}
-          return MainConstructor<targs{name}>(prev-names{self.name} local-name post-names{self.name})
+          MainConstructor<targs{name}>(prev-names{raw-name(self)} local-name post-names{raw-name(self)})
       }{}
 
     }
@@ -1089,7 +1088,7 @@ public defn compile (form:DefStructForm) -> ? :
     `hashable-equalable-methods => hashable-equalable-methods(form)
     `constructors => all-constructors(form)])
 
-  println(res)
+  ; println(res)
   
   res
 

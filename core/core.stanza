@@ -7543,26 +7543,25 @@ public defn Array<T> (n:Int, x:T) -> Array<T> :
 public defn Array<T> (n:Int) -> Array<T> :
   Array*<T>(n, sentinel)
 
-defn ensure-not-sentinel (value, i:Int) :
-  match(value:Sentinel) : fatal("Index (%_) is uninitialized." % [i])
+defn check-sentinel (v, i:Int) :
+  #if-not-defined(OPTIMIZE) :
+    match(v:Sentinel) : fatal("Index (%_) is uninitialized." % [i])
+  #else :
+    false
 
 lostanza defmethod get<?T> (a:ref<Array<?T>>, i:ref<Int>) -> ref<T> :
-  #if-not-defined(OPTIMIZE) :
-    core/ensure-index-in-bounds(a, i)
-  val res = a.items[i.value]
-  #if-not-defined(OPTIMIZE) :
-    ensure-not-sentinel(res, i)
-  res
+  core/ensure-index-in-bounds(a, i)
+  val v = a.items[i.value]
+  check-sentinel(v, i)
+  return v
 
 lostanza defmethod set<?T> (a:ref<Array<?T>>, i:ref<Int>, v:ref<?T>) -> ref<False> :
-  #if-not-defined(OPTIMIZE) :
-    core/ensure-index-in-bounds(a, i)
+  core/ensure-index-in-bounds(a, i)
   a.items[i.value] = v
   return false
 
 lostanza defmethod set-all<?T> (xs:ref<Array<?T>>, r:ref<Range>, v:ref<?T>) -> ref<False> :
-  #if-not-defined(OPTIMIZE) :
-    core/ensure-index-range(xs, r)
+  core/ensure-index-range(xs, r)
   val range = core/range-bound(xs, r) as ref<Tuple<Int>>
   val b = range.items[0].value
   val e = range.items[1].value
