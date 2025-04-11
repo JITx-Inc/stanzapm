@@ -504,7 +504,7 @@ defn deftype-and-multis (form:DefStructForm) -> ? :
                                            parent?{<: Parent}{}
                                          }
 
-    private lostanza deftype LoStruct<targs{name}> <: Struct<targs{name}> :
+    protected lostanza deftype LoStruct<targs{name}> <: Struct<targs{name}> :
       fields{
         setter?{ var }{} name:ref<local-type>
       }
@@ -546,10 +546,10 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
       ;Field getter.
       ;If voidable, then checks that the value is set.
       voidable?{
-        private lostanza defn raw-name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type|Uninitialized> :
+        protected lostanza defn raw-name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type|Uninitialized> :
           return self.name
       }{
-        private lostanza defn raw-name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type> :
+        protected lostanza defn raw-name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type> :
           return self.name
       }
 
@@ -567,7 +567,7 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
       ;Field setter.
       ;Ensure that value satisfies preconditions.
       setter?{
-        private lostanza defn lo-setter<targs{?name}> (self:ref<LoStruct<targs{?name}>>, value:ref<type>) -> ref<False> :
+        protected lostanza defn lo-setter<targs{?name}> (self:ref<LoStruct<targs{?name}>>, value:ref<type>) -> ref<False> :
           self.name = value
           return false
         defmethod setter<targs{?name}> (self:LoStruct<targs{?name}>, value:type) -> False :
@@ -706,7 +706,7 @@ defn simple-constructor (form:DefStructForm,
 
   val template = `(
 
-    private lostanza defn LoConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<LoStruct<targs{name}>> :
+    protected lostanza defn LoConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<LoStruct<targs{name}>> :
       return new LoStruct<targs{name}>{ fields{name} }
           
     defn Constructor<targs{name}> (fields{init?{}{local-name:type}}) -> LoStruct<targs{name}> :
