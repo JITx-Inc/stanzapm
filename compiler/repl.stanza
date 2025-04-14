@@ -494,7 +494,7 @@ public defn REPL (macro-plugins:Tuple<String>,
             vprintln("REPL: Compiling EPackage %_ to VMPackage." % [name(p)])
             val vmp = within log-time(REPL-LOWERING-AND-COMPILATION, suffix(name(p))) :
               val lowered = within log-time(REPL-LOWER-TO-UNOPTIMIZED) :
-                lower-unoptimized(p)
+                lower-unoptimized(p, false, false)
               within log-time(REPL-COMPILE-LOWERED) :
                 compile(lowered, false)
             vprintln("REPL: Done Compiling EPackage %_ to VMPackage." % [name(p)])

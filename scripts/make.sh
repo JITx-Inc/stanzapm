@@ -60,6 +60,8 @@ PKGFILES="math \
           core/debug-table \
           core/sighandler \
           core/local-table \
+          heap-analyzer \
+          profiler \
           arg-parser \
           line-wrap \
           stz/test-driver \

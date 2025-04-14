@@ -21,7 +21,8 @@ Constructs that must be handled, and their variants:
   Op - (AddOp / SubOp / MulOp / AndOp / OrOp / XorOp / NotOp / ShlOp / ShrOp /
         AshrOp / NegOp / EqOp / NeOp / LtOp / GtOp / LeOp / GeOp / UleOp / UltOp /
         UgtOp / UgeOp / FlushVMOp / LoadSpecialOp / DivModOp / NoOp / RecordLiveOp / LoadOp /
-        StoreOp / StoreArgOp / StoreSpecialOp / LoadArgOp / AllocOp / InstanceofOp)
+        StoreOp / StoreArgOp / StoreSpecialOp / LoadArgOp / AllocOp / InstanceofOp /
+        IncFunctionCounterOp / IsProfileOp)
   Branch - (EqOp / NeOp / LtOp / GtOp / LeOp / GeOp / UleOp / UltOp /
             UgtOp / UgeOp / HasHeapOp / HasStackOp / ArgEqOp)
   Set
@@ -557,6 +558,10 @@ public defstruct FlipOp <: VMOp : (op:VMOp)
 defmethod print (o:OutputStream, x:FlipOp) :
   print(o, "flip(%_)" % [op(x)])
 
+public defstruct IncFunctionCounterOp <: VMOp : (id:Int)
+defmethod print (o:OutputStream, x:IncFunctionCounterOp) :
+  print(o, "incfunctioncounter(%_)" % [id(x)])
+
 public defstruct SafepointOp <: VMOp :
   id:Int
   trace-entry:StackTraceInfo
@@ -1014,6 +1019,8 @@ defn load-instructions (function:VMFunc, backend:Backend) :
           push(Op(SafepointOp(id(e), trace-entry!(e), []), List(), List()))
         (e:UnreachableIns) :
           false
+        (e:IncFunctionCounterIns) :
+          push(Op(IncFunctionCounterOp(id(e)), List(), List()))
     val next = to-list $
       for s in succs(b) seq :
         index(blocks[s])
@@ -1412,6 +1419,7 @@ defn num-scratch-registers (i:Ins) :
     (i:Branch) :
       match(op(i)) :
         (op:HasHeapOp) : 4
+        (op:IsProfileOp) : 4
         (op) : 0
     (i:Match) : 2
     (i:MethodDispatch) : 0
@@ -1878,6 +1886,7 @@ defn register-assignment (blk:Block, b:Int, backend:Backend) :
       (e:Branch) :
         match(op(e)) :
           (op:HasHeapOp) : ensure-available(list-r0-r1, List())
+          (op:IsProfileOp) : ensure-available(list-r0-r1, List())
           (op) : false
         emit(Branch(op(e), map(annotate, xs(e)), killed?(e)))
         do(free-var, killed(e))
@@ -2837,12 +2846,18 @@ defn assemble (emitter:CodeEmitter,
         defn cmp-arity (arg:Int, value:Int, eq-op:asm-Op) :
           val arg-reg = R(call-regs(backend(stubs))[arg])
           E $ BreakL(label-table[n(e)], eq-op, arg-reg, INT(value))
+        defn cmp-profile-flag () :
+          val TMP = R0
+          E $ LoadL(TMP, M(profile-flag(stubs)))
+          E $ BreakL(label-table[n(e)], asm-EqOp(), TMP, INT(1))
 
         match(op(e)) :
           (op:HasStackOp) :
             cmp-stack-limit(asm-UleOp())
           (op:HasHeapOp) :
             cmp-heap-limit(asm-UleOp())
+          (op:IsProfileOp) :
+            cmp-profile-flag()
           (op:ArgEqOp) :
             cmp-arity(arg(op), value(op), asm-EqOp())
           (fop:FlipOp) :
