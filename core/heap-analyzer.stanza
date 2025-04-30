@@ -372,7 +372,7 @@ lostanza defn class-name (x:ref<Int>) -> ref<String> :
 
   defn print-xml
       (s:FileOutputStream, id-objs:FlatIdObjects, sizes:Array<Int>,
-       nexts:Tuple<List<Int>>, doms:Tuple<Int>, threshold:Int = 0) :
+       nexts:Tuple<List<Int>>, doms:Tuple<Int>, max-depth:Int, min-size:Int) :
     val objs = objs(id-objs)
     defn children (doms:Tuple<Int>) -> Tuple<Tuple<Int>> :
       val children = to-tuple $ repeatedly({ Vector<Int>() }, length(nexts))
@@ -386,15 +386,16 @@ lostanza defn class-name (x:ref<Int>) -> ref<String> :
       println(s, str)
     val kiddies = children(doms)
     let walk (idx:Int = length(doms) - 1, depth:Int = 0) :
-      val id = order(id-objs)[idx]
-      val name = stringify(class-name(tag-of(objs, id)))
-      P(depth, "<%_ RETAINED=\"%_\" STATIC=\"%_\">" % [name, sizes[idx], size-of(objs, id)])
-      val childs = reverse $ to-list $ qsort({ sizes[_] }, filter({ sizes[_] > threshold }, kiddies[idx]))
-      for child in childs do :
-        walk(child, depth + 1)
-      P(depth, "</%_>" % [name])
+      if depth < max-depth :
+        val id = order(id-objs)[idx]
+        val name = stringify(class-name(tag-of(objs, id)))
+        P(depth, "<%_ RETAINED=\"%_\" STATIC=\"%_\">" % [name, sizes[idx], size-of(objs, id)])
+        val childs = reverse $ to-list $ qsort({ sizes[_] }, filter({ sizes[_] >= min-size }, kiddies[idx]))
+        for child in childs do :
+          walk(child, depth + 1)
+        P(depth, "</%_>" % [name])
 
-  public defn heap-dominator-tree (filename:String) :
+  public defn heap-dominator-tree (filename:String, max-depth:Int = MAX-INT, min-size:Int = 0) :
     val objs = FlatObjects()
     val id-objs0 = objects-to-id-objects(objs)
     val id-objs = depth-first(id-objs0)
@@ -403,7 +404,7 @@ lostanza defn class-name (x:ref<Int>) -> ref<String> :
     val sizes = calc-sizes(id-objs, doms)
     ; print-id-object-stats(objs, to-tuple $ gather(sizes, reorder(id-objs)))
     val s = FileOutputStream(filename)
-    print-xml(s, id-objs, sizes, nxts, doms)
+    print-xml(s, id-objs, sizes, nxts, doms, max-depth, min-size)
     close(s)
 
   ; heap-dominator-tree("sizes.xml")
