@@ -20,16 +20,18 @@ public defstruct StackTraceInfo :
   package:Symbol
   signature:String|False
   info:AbsoluteFileInfo|False
+  function:Int|False with: ( updater => sub-function )
 with:
   constructor => #StackTraceInfo
 
 ;Sanity check: Ensure that we don't have signature and info as false.
 public defn StackTraceInfo (package:Symbol,
                             signature:String|False,
-                            info:AbsoluteFileInfo|False) :
+                            info:AbsoluteFileInfo|False,
+                            function:Int|False = false) :
   if signature is False and info is False :
     fatal("StackTraceInfo cannot have both signature and info be false.")
-  #StackTraceInfo(package, signature, info)
+  #StackTraceInfo(package, signature, info, function)
 
 ;Print in a human-readable way.
 ;e.g. function myfunction in mypackage at info

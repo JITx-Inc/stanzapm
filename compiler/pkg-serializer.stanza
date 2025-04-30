@@ -671,7 +671,7 @@ defserializer PkgSerializer (include-asm?:True|False) :
     DerefOp: ()
     CRSPOp: ()
 
-  deftype trace-entry (StackTraceInfo) : (package:symbol, signature:opt(string), info:opt(absinfo))
+  deftype trace-entry (StackTraceInfo) : (package:symbol, signature:opt(string), info:opt(absinfo), function:opt(int))
 
   ;==========================================================
   ;================== Assembly Types ========================

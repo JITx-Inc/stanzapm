@@ -254,6 +254,7 @@ public lostanza deftype StackTraceRecord :
   file:ptr<byte>
   line:int
   column:int
+  function:long
 
 ;Add the given record as an entry in the stack trace.
 public lostanza defn add-entry (b:ref<StackTraceBuilder>,

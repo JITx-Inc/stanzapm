@@ -336,6 +336,7 @@ deftype OperationIns :
   CommentIns <: OperationIns
   LiveIns <: OperationIns
   SafepointIns <: OperationIns
+  ProfileIns <: OperationIns
 
 ;Assumes that the results are loaded from registers in sequential order,
 ;and that we are sweeping through instructions backwards. 
@@ -373,6 +374,7 @@ defn do-results (func:Int -> ?, i:OperationIns) :
     (i:LiveIns) : false
     (i:CommentIns) : false
     (i:SafepointIns) : false
+    (i:ProfileIns) : false
 
 defn do-args (func:Int -> ?, i:OperationIns|DestinationIns) :
   defn f? (y:VMImm|False) :
@@ -408,6 +410,7 @@ defn do-args (func:Int -> ?, i:OperationIns|DestinationIns) :
     (i:MethodDispatchIns) : (f?(ys(i)), f?(zs(i)))
     (i:UnreachableIns) : false
     (i:SafepointIns) : false
+    (i:ProfileIns) : false
 
 defn do-dest (f:Int -> ?, i:DestinationIns) :
   match(i) :

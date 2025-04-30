@@ -360,7 +360,7 @@ defn analyze-single-block (emit:Ins -> ?,
       (ins:ETupleSet|EStruct|EPtr|ELabel|ETCall|
            EDump|EConv|EGoto|ECheckLength|ECheckSet|
            EBoxSet|EReturn|EObjectTGet|EClosureTGet|
-           ETDef|ETypeObject|EEnd|ELive|ECheckFail|ESafepoint) : gen-trivial-commands(ins)
+           ETDef|ETypeObject|EEnd|ELive|ECheckFail|ESafepoint|EProfile) : gen-trivial-commands(ins)
 
   ;Utility: For any uses of inferred variables generate
   ;them here.
@@ -551,7 +551,7 @@ defn analyze-single-block (emit:Ins -> ?,
   defn gen-trivial-commands (ins:ETupleSet|EStruct|EPtr|ELabel|ETCall|
                                  EDump|EConv|EGoto|ECheckLength|ECheckSet|
                                  EBoxSet|EReturn|EObjectTGet|EClosureTGet|
-                                 ETDef|ETypeObject|EEnd|ELive|ECheckFail|ESafepoint) :
+                                 ETDef|ETypeObject|EEnd|ELive|ECheckFail|ESafepoint|EProfile) :
     gen-uses(ins)
     emit(Wrapped<EIns>(ins))
     for x in varlocs(ins) do :
