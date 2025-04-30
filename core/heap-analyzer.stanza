@@ -30,7 +30,7 @@ lostanza defn class-name (x:ref<Int>) -> ref<String> :
 
 #if-defined(BOOTSTRAP) :
 
-  public defn heap-dominator-tree (filename:String, max-depth:Int = MAX-INT, min-size:Int = 0) : false
+  public defn heap-dominator-tree (filename:String, max-depth:Int = INT-MAX, min-size:Int = 0) : false
   public defn analyze-heap () -> Long : 0L
 
 #else :
@@ -395,7 +395,7 @@ lostanza defn class-name (x:ref<Int>) -> ref<String> :
           walk(child, depth + 1)
         P(depth, "</%_>" % [name])
 
-  public defn heap-dominator-tree (filename:String, max-depth:Int = MAX-INT, min-size:Int = 0) :
+  public defn heap-dominator-tree (filename:String, max-depth:Int = INT-MAX, min-size:Int = 0) :
     val objs = FlatObjects()
     val id-objs0 = objects-to-id-objects(objs)
     val id-objs = depth-first(id-objs0)
