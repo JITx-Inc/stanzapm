@@ -39,6 +39,7 @@ public defstruct DefStructForm :
   equalable?: True|False
   hashable?: True|False
   meta-utils?: True|False
+  lo-type:Token|Symbol|False|True
 
 ;Represents a field declaration in a DefStruct.
 ;- name: The name of the field.
@@ -80,6 +81,7 @@ public defstruct ForwardToWriter
 ;Listing of all supported struct options.
 public deftype StructOption
 public defstruct Constructor <: StructOption: (value:Token|True|False|Symbol)
+public defstruct LoType <: StructOption: (value:Token|False|True|Symbol)
 public defstruct KeywordConstructor <: StructOption: (value:Token|True|False|Symbol)
 public defstruct GenPrinter <: StructOption: (value:True|False)
 public defstruct GenWriter <: StructOption: (value:True|False)
@@ -110,6 +112,7 @@ defn name (o:FieldOption) -> Symbol :
 defn name (o:StructOption) -> Symbol :
   match(o) :
     (o:Constructor) : `constructor
+    (o:LoType) : `lo-type
     (o:KeywordConstructor) : `keyword-constructor
     (o:GenPrinter) : `printer
     (o:GenWriter) : `writer
@@ -180,6 +183,7 @@ public defn DefStructForm (info:FileInfo|False,
 
   ;Process the options.
   var constructor = true
+  var lo-type = false
   var keyword-constructor = false
   var printer? = None()
   var writer? = false
@@ -189,6 +193,7 @@ public defn DefStructForm (info:FileInfo|False,
   for o in options :
     match(o) :
       (o:Constructor) : constructor = o.value
+      (o:LoType) : lo-type = o.value
       (o:KeywordConstructor) : keyword-constructor = o.value
       (o:GenPrinter) : printer? = One(o.value)
       (o:GenWriter) : writer? = o.value
@@ -228,7 +233,8 @@ public defn DefStructForm (info:FileInfo|False,
                 writer?,
                 equalable?,
                 hashable?,
-                meta-utils?)
+                meta-utils?,
+                lo-type)
 
 ;============================================================
 ;====================== Parsing =============================
@@ -267,6 +273,7 @@ defsyntax defstruct-syntax :
   ;Syntax of each option.
   defproduction struct-option!:StructOption
   defrule struct-option! = (constructor ?name:#bool-id-setting) : Constructor(name)
+  defrule struct-option! = (lo-type ?name:#bool-id-setting) : LoType(name)
   defrule struct-option! = (keyword-constructor ?name:#bool-id-setting) : KeywordConstructor(name)
   defrule struct-option! = (printer ?v:#bool-setting) : GenPrinter(v)
   defrule struct-option! = (writer ?v:#bool-setting) : GenWriter(v)
@@ -328,8 +335,11 @@ defn CSE (info:FileInfo|False, msg) :
 ;============================================================
 
 ;Generate the bindings for the given fields.
-defn bindings (fields:List<StructField>,
+defn bindings (form:DefStructForm,
+               fields:List<StructField>,
                struct-name:Symbol|Token) -> Nested :
+
+  val all-field-names = to-tuple(seq({_.name}, fields))
 
   ;Generate the bindings for the given field at index 'index'.
   defn bindings (field:StructField, index:Int) -> Tuple<KeyValue> :
@@ -385,11 +395,16 @@ defn bindings (fields:List<StructField>,
       (name:True) : sub-token-item?(field.updater, symbol-join(["sub-", field.name]))
       (name:False) : false
 
+    val prev-names = repeated([`name => all-field-names[0 to index]])
+    val post-names = repeated([`name => all-field-names[(index + 1) to false]])
+
     [`name => field.name
+     `raw-name => gensym(symbol-join(["raw-" field.name]))
      `type => field.type
      `first? => choice(index == 0)
      `doc-string => field.doc-string.value?
      `doc-string? => choice(not field.doc-string.empty?)
+     `description-val => gensym(symbol-join(["ensure-field-" struct-name '-' field.name "-initialized" ]))
      `description => to-string("field %_/%_" % [struct-name, field.name])
      `qualified-name => symbol-join([struct-name '/' field.name])
      `method? => choice(field.as-method?)
@@ -405,9 +420,13 @@ defn bindings (fields:List<StructField>,
      `voidable? => choice(voidable?)
      `init? => choice(not field.init.empty?)
      `init-value => field.init.value?
+     `ensure-field-initialized-qualified-name => gensym(symbol-join(["ensure-field-" struct-name '-' field.name "-initialized-name" ]))
      `default? => choice(not field.default.empty?)
      `default-value => field.default.value?
-     `initialized? => initialized?]
+     `initialized? => initialized?
+     `voidable-with-printer-or-writer? => choice(voidable? and (form.printer? is True or form.writer? is True))
+     `prev-names => prev-names
+     `post-names => post-names]
 
   ;Generate the bindings for each field.
   nested $ to-tuple $
@@ -422,14 +441,14 @@ defn bindings (fields:List<StructField>,
 defn meta-utils-methods (form:DefStructForm) -> ? :
   val template = `(
     meta-utils?{
-      defmethod core/meta-utils/field-values (x:Struct) :
+      defmethod core/meta-utils/field-values (x:LoStruct) :
         [fields{name(x)}]
-      defmethod core/meta-utils/field-names (x:Struct) :
+      defmethod core/meta-utils/field-names (x:LoStruct) :
         [fields{`name}]
-      defmethod core/meta-utils/field-accessors (x:Struct) :
-        val accessors = [fields{name upcast-as (Struct -> ?)}]
+      defmethod core/meta-utils/field-accessors (x:LoStruct) :
+        val accessors = [fields{name upcast-as (LoStruct -> ?)}]
         accessors as Tuple<(core/meta-utils/HasMetaUtils -> ?)>
-      defmethod core/meta-utils/field-entries (x:Struct) :
+      defmethod core/meta-utils/field-entries (x:LoStruct) :
         [fields{`name => name(x)}]
     }{}
   )
@@ -444,7 +463,7 @@ defn meta-utils-methods (form:DefStructForm) -> ? :
 defn hashable-equalable-methods (form:DefStructForm) -> ? :
   val template = `(
     equalable?{
-      defmethod equal? (lhs:Struct, rhs:Struct) :
+      defmethod equal? (lhs:LoStruct, rhs:LoStruct) :
         has-fields?{
           fields{first?{}{and} equal?(name(lhs), name(rhs))}
         }{
@@ -453,7 +472,7 @@ defn hashable-equalable-methods (form:DefStructForm) -> ? :
     }{}
 
     hashable?{
-      defmethod hash (x:Struct) :
+      defmethod hash (x:LoStruct) :
         hash([Struct-name fields{name(x)}])
     }{}
   )
@@ -477,11 +496,18 @@ defn deftype-and-multis (form:DefStructForm) -> ? :
   val template = `(
 
     ;Type declaration
+
     deftype Struct<targs{name}> meta-utils?{
-                                  <: parent?{Parent &}{} core/meta-utils/HasMetaUtils
-                                }{
-                                  parent?{<: Parent}{}
-                                }
+                                           <: parent?{Parent &}{} core/meta-utils/HasMetaUtils
+                                         }{
+                                           parent?{<: Parent}{}
+                                         }
+
+    private lostanza deftype LoStruct<targs{name}> <: Struct<targs{name}> :
+      fields{
+        setter?{ var }{} name:ref<local-type>
+      }
+
 
     ;Field multis
     fields{
@@ -518,37 +544,47 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
 
       ;Field getter.
       ;If voidable, then checks that the value is set.
-      defmethod name (this) :
+      voidable?{
+        val ensure-field-initialized-qualified-name = `qualified-name
+      }{}
+
+      lostanza defmethod name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type> :
         voidable?{
           #if-not-defined(OPTIMIZE) :
-            if local-name is Uninitialized :
-              fatal("Field %_ has not been initialized." % [`qualified-name])
-          local-name as type
+            if self.name == core/uninitialized :
+              uninitialized-field-error(ensure-field-initialized-qualified-name)
+          return self.name as ref<type>
         }{
-          local-name
+          return self.name
         }
 
+      voidable-with-printer-or-writer?{
+        lostanza defn raw-name<targs{?name}> (self:ref<LoStruct<targs{?name}>>) -> ref<type|Uninitialized> :
+          return self.name
+      }{}
 
       ;Field setter.
       ;Ensure that value satisfies preconditions.
       setter?{
-        defmethod setter (this, value:type) :
+        lostanza defmethod setter<targs{?name}> (self:ref<LoStruct<targs{?name}>>, value:ref<type>) -> ref<False> :
           ensure?{
             #if-not-defined(OPTIMIZE) :
               ensure(description, value)
           }{}
-          local-name = value
+          self.name = value
+          return false
       }{}
 
       ;Field updater.
       ;Ensure that value satisfies preconditions.
       updater?{
-        defmethod updater (this, local-name:type) :
+        val description-val = description
+        lostanza defmethod updater<targs{?name}> (self:ref<LoStruct<targs{?name}>>, local-name:ref<type>) -> ref<LoStruct<targs{name}>> :
           ensure?{
             #if-not-defined(OPTIMIZE) :
-              ensure(description, local-name)
+              ensure(description-val, local-name)
           }{}
-          MainConstructor<targs{name}>(fields{local-name})
+          return MainConstructor<targs{name}>(prev-names{self.name} local-name post-names{self.name})
       }{}
 
     }
@@ -567,14 +603,14 @@ defn getters-setters-updaters (main-constructor:Token|Symbol) -> ? :
 defn printer-and-writer (form:DefStructForm) -> ? :
   val template = `(
     printer?{
-      defmethod print (o:OutputStream, this) :
+      defmethod print (o:OutputStream, self:LoStruct) :
         val print-items = [
           fields{
             voidable?{
-              if local-name is Uninitialized : "%~ = void" % [`name]
-              else : "%~ = %~" % [`name, local-name]
+              if raw-name(self) is Uninitialized : "%~ = void" % [`name]
+              else : "%~ = %~" % [`name, name(self)]
             }{
-              "%~ = %~" % [`name, local-name]
+              "%~ = %~" % [`name, name(self)]
             }
           }
         ]
@@ -582,20 +618,20 @@ defn printer-and-writer (form:DefStructForm) -> ? :
     }{}
 
     forward-to-writer?{
-      defmethod print (o:OutputStream, this) :
-        write(o, this)
+      defmethod print (o:OutputStream, self:LoStruct) :
+        write(o, self)
     }{}
     
     writer?{
-      defmethod write (o:OutputStream, this) :
+      defmethod write (o:OutputStream, self:LoStruct) :
         val write-items = Vector<?>()
         fields{
           init?{}{
             voidable?{
-              if local-name is-not Uninitialized :
-                collections/add(write-items, "%~" % [local-name])
+              if raw-name(self) is-not Uninitialized :
+                collections/add(write-items, "%~" % [name(self)])
             }{
-              collections/add(write-items, "%~" % [local-name])
+              collections/add(write-items, "%~" % [name(self)])
             }
           }
         }
@@ -630,21 +666,14 @@ defn printer-and-writer (form:DefStructForm) -> ? :
 defn main-constructor (form:DefStructForm,
                        main-constructor:Token|Symbol) -> ? :
   val template = `(
-    defn MainConstructor<targs{name}> (fields{name:local-type}) :
+    lostanza defn MainConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<LoStruct<targs{name}>> :
+      return new LoStruct<targs{name}>{ fields{name} }
+          
+    ;Getters, setters, and updaters for each field.
+    getters-setters-updaters
 
-      ;Define mutable local variables.
-      fields{setter?{
-        var local-name:local-type = name
-      }{}}
-
-      ;Create struct.
-      new Struct<targs{name}> :
-
-        ;Getters, setters, and updaters for each field.
-        getters-setters-updaters
-
-        ;Printer and writer
-        printer-and-writer
+    ;Printer and writer
+    printer-and-writer
   )
 
   splice $ substitute(template, [
@@ -666,21 +695,26 @@ defn main-constructor (form:DefStructForm,
 ;  - No ensures.
 ;  - No inits.
 defn simple-constructor (form:DefStructForm,
+                         lo-constructor:Symbol,
                          constructor:Symbol|Token) -> ? :
 
   val template = `(
 
-    defn Constructor<targs{name}> (fields{init?{}{name:type}}) :
-
+    private lostanza defn LoConstructor<targs{name}> (fields{name:ref<local-type>}) -> ref<LoStruct<targs{name}>> :
+      return new LoStruct<targs{name}>{ fields{name} }
+          
+    defn Constructor<targs{name}> (fields{init?{}{local-name:type}}) -> LoStruct<targs{name}> :
       ;Initialize 'init' fields.
       fields{
         init?{
-          voidable?{
-            var name:type
-          }{
+          voidable?{}{
             val name:type = init-value
           }
-        }{}
+        }{
+          setter?{
+            val name:type = local-name
+          }{}
+        }
       }
 
       ;Check preconditions.
@@ -693,29 +727,28 @@ defn simple-constructor (form:DefStructForm,
           }
         }{}
       }
-
-      ;Define mutable local variables.
-      fields{
-        setter?{
-          voidable?{
-            var local-name:local-type = uninitialized
+      LoConstructor<targs{name}>(
+        fields{
+          init?{
+            voidable?{
+              uninitialized
+            }{
+              name
+            }
           }{
-            var local-name:type = name
+            name
           }
-        }{}
-      }
-
-      ;Create struct.
-      new Struct<targs{name}> :
-
-        ;Getters, setters, and updaters for each field.
-        getters-setters-updaters
-
-        ;Printer and writer
-        printer-and-writer
+        }
+      )
+          
+    ;Getters etc
+    getters-setters-updaters
+    ;Printer and writer
+    printer-and-writer
   )
 
   splice $ substitute(template, [
+    `LoConstructor => lo-constructor
     `Constructor => constructor
     `getters-setters-updaters => getters-setters-updaters(constructor)
     `printer-and-writer => printer-and-writer(form)])
@@ -924,6 +957,8 @@ defn all-constructors (form:DefStructForm) -> ? :
     (c:True) : form.name
     (c:False) : false
 
+  val lo-constructor-name = gensym(form.name)
+
   ;Generate the name of the main constructor.
   val main-constructor-name = gensym(form.name)
 
@@ -936,7 +971,7 @@ defn all-constructors (form:DefStructForm) -> ? :
   ;Compute the simple constructor.
   val simple-constructor =
     if form.use-simple-constructor? :
-      One(simple-constructor(form, constructor-name as Token|Symbol))
+      One(simple-constructor(form, lo-constructor-name, constructor-name as Token|Symbol))
     else :
       None()
 
@@ -952,7 +987,7 @@ defn all-constructors (form:DefStructForm) -> ? :
   val positional-constructor =
     match(constructor-name:Token|Symbol) :
       if positional-vs-keyword-ambiguity?(form) :
-        val new-fields = bindings(form.force-required-field, form.name)
+        val new-fields = bindings(form, form.force-required-field, form.name)
         One $ positional-constructor(constructor-name, main-constructor-name, new-fields)
       else :
         One $ positional-constructor(constructor-name, main-constructor-name)
@@ -1028,17 +1063,28 @@ public defn compile (form:DefStructForm) -> ? :
     hashable-equalable-methods
     constructors)
 
-  fill-template(template, [
+  val lo-name =
+    match(form.lo-type) :
+      (name:Symbol|Token) : name
+      (name) : symbol-join $ ["Lo" form.name]
+
+  val res = fill-template(template, [
     `Struct => deep(form.name)
+    `LoStruct => deep(lo-name)
     `targs => deep(repeated([`name => form.targs]))
-    `fields => deep(/bindings(form.fields, form.name))
+    `fields => deep(/bindings(form, form.fields, form.name))
     `x => deep(gensym(`x))
     `Uninitialized => deep(`core/Uninitialized)
     `uninitialized => deep(`core/uninitialized)
+    `uninitialized-field-error => deep(`core/uninitialized-field-error)
     `deftype-and-multis => deftype-and-multis(form)
     `meta-utils-methods => meta-utils-methods(form)
     `hashable-equalable-methods => hashable-equalable-methods(form)
     `constructors => all-constructors(form)])
+
+  ; println(res)
+  
+  res
 
 ;============================================================
 ;================== Small Utilities =========================
