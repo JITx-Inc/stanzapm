@@ -168,6 +168,7 @@ public val TYPEOF-OPCODE = 143
 ;branch operation
 public val JUMP-SET-OPCODE = 144
 public val JUMP-TAGBITS-OPCODE = 240
+public val JUMP-TAGBITS-DOUBLE-OPCODE = 254
 public val JUMP-TAGWORD-OPCODE = 242
 public val GOTO-OPCODE = 145
 ;conversion operations
@@ -194,6 +195,8 @@ public val TAG-OPCODE-BYTE = 164
 public val TAG-OPCODE-CHAR = 165
 public val TAG-OPCODE-INT = 166
 public val TAG-OPCODE-FLOAT = 167
+public val TAG-OPCODE-DOUBLE = 252
+public val DETAG-OPCODE-DOUBLE = 253
 ;storing operations
 public val STORE-OPCODE-1 = 168
 public val STORE-OPCODE-4 = 169
@@ -389,8 +392,6 @@ public defn op0-opcode (op:VMOp) -> Int :
 ;Returns false if operation becomes a set operation.
 public defn op1-opcode (op:VMOp, xt:VMType|False, yt:VMType) -> Int|False :
   match(op, xt, yt) :
-    (op:IntNotOp, xt:VMRef, yt:VMRef) : INT-NOT-OPCODE
-    (op:IntNegOp, xt:VMRef, yt:VMRef) : INT-NEG-OPCODE
     (op:NotOp, xt:VMByte, yt:VMByte) : NOT-OPCODE-BYTE
     (op:NotOp, xt:VMInt, yt:VMInt) : NOT-OPCODE-INT
     (op:NotOp, xt:VMLong, yt:VMLong) : NOT-OPCODE-LONG
@@ -431,7 +432,9 @@ public defn op1-opcode (op:VMOp, xt:VMType|False, yt:VMType) -> Int|False :
         CHAR-TYPE : TAG-OPCODE-CHAR
         INT-TYPE : TAG-OPCODE-INT
         FLOAT-TYPE : TAG-OPCODE-FLOAT
-    (op:DetagOp, xt, yt) : DETAG-OPCODE
+        DOUBLE-TYPE : TAG-OPCODE-DOUBLE
+    (op:DetagOp, xt, yt) :
+      TAG-OPCODE-DOUBLE when (type(op) == DOUBLE-TYPE) else DETAG-OPCODE
     (op:DerefOp, xt, yt) : DEREF-OPCODE
     (op:GCOp, xt, yt) : GC-OPCODE
     (op:PrintStackTraceOp, xt, yt) : PRINT-STACK-TRACE-OPCODE
@@ -439,21 +442,6 @@ public defn op1-opcode (op:VMOp, xt:VMType|False, yt:VMType) -> Int|False :
 
 public defn op2-opcode (op:VMOp, xt:VMType|False, yt:VMType) -> Int :
   match(op, xt, yt) :
-    (op:IntAddOp, xt:VMRef, yt:VMRef) : INT-ADD-OPCODE
-    (op:IntSubOp, xt:VMRef, yt:VMRef) : INT-SUB-OPCODE
-    (op:IntMulOp, xt:VMRef, yt:VMRef) : INT-MUL-OPCODE
-    (op:IntDivOp, xt:VMRef, yt:VMRef) : INT-DIV-OPCODE
-    (op:IntModOp, xt:VMRef, yt:VMRef) : INT-MOD-OPCODE
-    (op:IntAndOp, xt:VMRef, yt:VMRef) : INT-AND-OPCODE
-    (op:IntOrOp, xt:VMRef, yt:VMRef) : INT-OR-OPCODE
-    (op:IntXorOp, xt:VMRef, yt:VMRef) : INT-XOR-OPCODE
-    (op:IntShlOp, xt:VMRef, yt:VMRef) : INT-SHL-OPCODE
-    (op:IntShrOp, xt:VMRef, yt:VMRef) : INT-SHR-OPCODE
-    (op:IntAshrOp, xt:VMRef, yt:VMRef) : INT-ASHR-OPCODE
-    (op:IntLtOp, xt:VMRef, yt:VMRef) : INT-LT-OPCODE
-    (op:IntGtOp, xt:VMRef, yt:VMRef) : INT-GT-OPCODE
-    (op:IntLeOp, xt:VMRef, yt:VMRef) : INT-LE-OPCODE
-    (op:IntGeOp, xt:VMRef, yt:VMRef) : INT-GE-OPCODE
     (op:RefEqOp, xt:VMRef, yt:VMRef) : REF-EQ-OPCODE
     (op:RefNeOp, xt:VMRef, yt:VMRef) : REF-NE-OPCODE
     (op:EqOp, xt:VMLong, yt:VMRef) : EQ-OPCODE-REF
@@ -544,10 +532,6 @@ public defn op2-opcode (op:VMOp, xt:VMType|False, yt:VMType) -> Int :
 
 public defn branch2-opcode (op:VMOp, xt:VMType) -> Int :
   match(op, xt) :
-    (op:IntLtOp, xt:VMRef) : JUMP-INT-LT-OPCODE
-    (op:IntGtOp, xt:VMRef) : JUMP-INT-GT-OPCODE
-    (op:IntLeOp, xt:VMRef) : JUMP-INT-LE-OPCODE
-    (op:IntGeOp, xt:VMRef) : JUMP-INT-GE-OPCODE
     (op:EqOp, xt:VMRef) : JUMP-EQ-OPCODE-REF
     (op:EqOp, xt:VMByte) : JUMP-EQ-OPCODE-BYTE
     (op:EqOp, xt:VMInt) : JUMP-EQ-OPCODE-INT
@@ -734,6 +718,7 @@ OPCODE-NAMES[DEREF-OPCODE] = "DEREF-OPCODE"
 OPCODE-NAMES[TYPEOF-OPCODE] = "TYPEOF-OPCODE"
 OPCODE-NAMES[JUMP-SET-OPCODE] = "JUMP-SET-OPCODE"
 OPCODE-NAMES[JUMP-TAGBITS-OPCODE] = "JUMP-TAGBITS-OPCODE"
+OPCODE-NAMES[JUMP-TAGBITS-DOUBLE-OPCODE] = "JUMP-TAGBITS-DOUBLE-OPCODE"
 OPCODE-NAMES[JUMP-TAGWORD-OPCODE] = "JUMP-TAGWORD-OPCODE"
 OPCODE-NAMES[GOTO-OPCODE] = "GOTO-OPCODE"
 OPCODE-NAMES[CONV-OPCODE-BYTE-FLOAT] = "CONV-OPCODE-BYTE-FLOAT"
@@ -754,10 +739,12 @@ OPCODE-NAMES[CONV-OPCODE-DOUBLE-INT] = "CONV-OPCODE-DOUBLE-INT"
 OPCODE-NAMES[CONV-OPCODE-DOUBLE-LONG] = "CONV-OPCODE-DOUBLE-LONG"
 OPCODE-NAMES[CONV-OPCODE-DOUBLE-FLOAT] = "CONV-OPCODE-DOUBLE-FLOAT"
 OPCODE-NAMES[DETAG-OPCODE] = "DETAG-OPCODE"
+OPCODE-NAMES[DETAG-OPCODE-DOUBLE] = "DETAG-OPCODE-DOUBLE"
 OPCODE-NAMES[TAG-OPCODE-BYTE] = "TAG-OPCODE-BYTE"
 OPCODE-NAMES[TAG-OPCODE-CHAR] = "TAG-OPCODE-CHAR"
 OPCODE-NAMES[TAG-OPCODE-INT] = "TAG-OPCODE-INT"
 OPCODE-NAMES[TAG-OPCODE-FLOAT] = "TAG-OPCODE-FLOAT"
+OPCODE-NAMES[TAG-OPCODE-DOUBLE] = "TAG-OPCODE-DOUBLE"
 OPCODE-NAMES[STORE-OPCODE-1] = "STORE-OPCODE-1"
 OPCODE-NAMES[STORE-OPCODE-4] = "STORE-OPCODE-4"
 OPCODE-NAMES[STORE-OPCODE-8] = "STORE-OPCODE-8"

@@ -253,46 +253,67 @@ public defn coalesce (f:CallFormat) :
 ;==================== Tag Bits ==============================
 ;============================================================
 
-public lostanza val VM-INT-TAG-BITS:long = 0L
-public lostanza val VM-REF-TAG-BITS:long = 1L
-public lostanza val VM-MARKER-TAG-BITS:long = 2L
-public lostanza val VM-BYTE-TAG-BITS:long = 3L
-public lostanza val VM-CHAR-TAG-BITS:long = 4L
-public lostanza val VM-FLOAT-TAG-BITS:long = 5L
+public lostanza val VM-BASE-TAG-BIT:int = 46
+public lostanza val VM-REF-TAG-BIT:int = 0
+public lostanza val VM-INT-TAG-BIT:int = 0
+public lostanza val VM-MARKER-TAG-BIT:int = 1
+public lostanza val VM-BYTE-TAG-BIT:int = 2
+public lostanza val VM-CHAR-TAG-BIT:int = 3
+public lostanza val VM-FLOAT-TAG-BIT:int = 4
+public lostanza val VM-DOUBLE-TAG-BIT:int = 5
+public lostanza val VM-REF-TAG-BITS:int = 0
+public lostanza val VM-INT-TAG-BITS:int = 1 << VM-INT-TAG-BIT
+public lostanza val VM-MARKER-TAG-BITS:int = 1 << VM-MARKER-TAG-BIT
+public lostanza val VM-BYTE-TAG-BITS:int = 1 << VM-BYTE-TAG-BIT
+public lostanza val VM-CHAR-TAG-BITS:int = 1 << VM-CHAR-TAG-BIT
+public lostanza val VM-FLOAT-TAG-BITS:int = 1 << VM-FLOAT-TAG-BIT
+public lostanza val VM-DOUBLE-TAG-BITS-MIN:int = 1 << VM-DOUBLE-TAG-BIT
+public lostanza val VM-MARKER-TAG-BITS-SHIFTED:long = VM-MARKER-TAG-BITS << VM-BASE-TAG-BIT
 
-public lostanza val INT-TAG-INT:ref<Int> = new Int{VM-INT-TAG-BITS as int}
-public lostanza val REF-TAG-INT:ref<Int> = new Int{VM-REF-TAG-BITS as int}
-public lostanza val MARKER-TAG-INT:ref<Int> = new Int{VM-MARKER-TAG-BITS as int}
-public lostanza val BYTE-TAG-INT:ref<Int> = new Int{VM-BYTE-TAG-BITS as int}
-public lostanza val CHAR-TAG-INT:ref<Int> = new Int{VM-CHAR-TAG-BITS as int}
-public lostanza val FLOAT-TAG-INT:ref<Int> = new Int{VM-FLOAT-TAG-BITS as int}
+public lostanza val BASE-TAG-BIT-INT:ref<Int> = new Int{VM-BASE-TAG-BIT}
+public lostanza val INT-TAG-BIT-INT:ref<Int> = new Int{VM-INT-TAG-BIT}
+public lostanza val REF-TAG-BIT-INT:ref<Int> = new Int{VM-REF-TAG-BIT}
+public lostanza val MARKER-TAG-BIT-INT:ref<Int> = new Int{VM-MARKER-TAG-BIT}
+public lostanza val BYTE-TAG-BIT-INT:ref<Int> = new Int{VM-BYTE-TAG-BIT}
+public lostanza val CHAR-TAG-BIT-INT:ref<Int> = new Int{VM-CHAR-TAG-BIT}
+public lostanza val FLOAT-TAG-BIT-INT:ref<Int> = new Int{VM-FLOAT-TAG-BIT}
+public lostanza val DOUBLE-TAG-BIT-INT:ref<Int> = new Int{VM-FLOAT-TAG-BIT}
+
+public lostanza val INT-TAG-INT:ref<Int> = new Int{VM-INT-TAG-BITS}
+public lostanza val REF-TAG-INT:ref<Int> = new Int{VM-REF-TAG-BITS}
+public lostanza val MARKER-TAG-INT:ref<Int> = new Int{VM-MARKER-TAG-BITS}
+public lostanza val BYTE-TAG-INT:ref<Int> = new Int{VM-BYTE-TAG-BITS}
+public lostanza val CHAR-TAG-INT:ref<Int> = new Int{VM-CHAR-TAG-BITS}
+public lostanza val FLOAT-TAG-INT:ref<Int> = new Int{VM-FLOAT-TAG-BITS}
+public lostanza val DOUBLE-TAG-INT-MIN:ref<Int> = new Int{VM-DOUBLE-TAG-BITS-MIN}
+public lostanza val MARKER-TAG-LONG:ref<Long> = new Long{VM-MARKER-TAG-BITS-SHIFTED}
 
 ;============================================================
 ;==================== VM Constants ==========================
 ;============================================================
 
 lostanza defn untag (x:long) -> ptr<?> :
-  val tagbits = x & 7L
-  if tagbits != VM-REF-TAG-BITS : fatal("Not a heap-allocated object!")
-  return (x - VM-REF-TAG-BITS + 8) as ptr<?>
+  val tagbits = x >> VM-BASE-TAG-BIT
+  if tagbits != 0 : fatal("Not a heap-allocated object!")
+  return (x + 8) as ptr<?>
 
 lostanza defn tag (x:ptr<?>) -> long :
-  return (x + VM-REF-TAG-BITS) as long
+  return x as long
 
 public lostanza defn void-marker () -> long :
-  return (-1L << 3L) + VM-MARKER-TAG-BITS
+  return 0x7fffffffL | VM-MARKER-TAG-BITS-SHIFTED
 
 public lostanza defn false-marker () -> long :
-  return (FALSE-TYPE.value << 3L) + VM-MARKER-TAG-BITS
+  return FALSE-TYPE.value + VM-MARKER-TAG-BITS-SHIFTED
 
 public lostanza defn true-marker () -> long :
-  return (TRUE-TYPE.value << 3L) + VM-MARKER-TAG-BITS
+  return TRUE-TYPE.value + VM-MARKER-TAG-BITS-SHIFTED
 
-public defn void-marker-int () :
-  marker-int(-1)
+public defn void-marker-long () :
+  marker-long(0x7fffffff)
 
-public defn marker-int (t:Int) :
-  (t << 3) + MARKER-TAG-INT
+public defn marker-long (t:Int) :
+  to-long(t) + MARKER-TAG-LONG
 
 ;============================================================
 ;=================== VM Structures ==========================
@@ -788,16 +809,16 @@ lostanza defn dump-stack (stackref:long, vm:ref<VirtualMachine>) -> int :
 
 lostanza defn print-tag (ref:long) -> int :
   call-c clib/printf("inspect tag of %p\n", ref)
-  val tagbits = ref & 7L
+  val tagbits = ref >> VM-BASE-TAG-BIT
   if tagbits == VM-REF-TAG-BITS :
-    val tag = [(ref - VM-REF-TAG-BITS) as ptr<long>]
+    val tag = [ref as ptr<long>]
     if tag == FN-TYPE.value or tag == TYPE-TYPE.value :
       val f:ptr<Function> = untag(ref)
       call-c clib/printf("tagbits = %ld (REF), tag = %ld (FN/TYPE), code = %ld\n", tagbits, tag, f.code)
     else :
       call-c clib/printf("tagbits = %ld (REF), tag = %ld\n", tagbits, tag)
   else if tagbits == VM-MARKER-TAG-BITS :
-    val tag = ref >> 3L
+    val tag = tagbits & 0xffffffff
     call-c clib/printf("tagbits = %ld (MARKER), tag = %ld\n", tagbits, tag)
   else if tagbits == VM-INT-TAG-BITS :
     call-c clib/printf("tagbits = %ld (INT)\n", tagbits)
@@ -807,6 +828,8 @@ lostanza defn print-tag (ref:long) -> int :
     call-c clib/printf("tagbits = %ld (CHAR)\n", tagbits)
   else if tagbits == VM-FLOAT-TAG-BITS :
     call-c clib/printf("tagbits = %ld (FLOAT)\n", tagbits)
+  else if tagbits >= VM-DOUBLE-TAG-BITS-MIN :
+    call-c clib/printf("tagbits = %ld (DOUBLE)\n", tagbits)
   else :
     call-c clib/printf("Unrecognized tag bits.\n")
   return 0
@@ -836,8 +859,8 @@ defn EncodingResolver (class-table:ClassTable,
       add(branch-table, MatchFormat(branches))
     defmethod method-format (this, multi:Int, num-header-args:Int, num-args:Int) :
       add(branch-table, MultiFormat(multi, num-header-args, num-args))
-    defmethod marker (this, type:Int) : marker-int(type)
-    defmethod void-marker (this) : void-marker-int()
+    defmethod marker (this, type:Int) : marker-long(type)
+    defmethod void-marker (this) : void-marker-long()
     defmethod ref-offset (this) : REF-TAG-INT
     defmethod type-is-final? (this, n:Int) :
       val c = loaded-class(class-table, n)
@@ -854,6 +877,14 @@ defn EncodingResolver (class-table:ClassTable,
         CHAR-TYPE : CHAR-TAG-INT
         INT-TYPE : INT-TAG-INT
         FLOAT-TYPE : FLOAT-TAG-INT
+        DOUBLE-TYPE : DOUBLE-TAG-INT-MIN
+    defmethod tagbit (this, n:Int) :
+      switch(n) :
+        BYTE-TYPE : BYTE-TAG-BIT-INT
+        CHAR-TYPE : CHAR-TAG-BIT-INT
+        INT-TYPE : INT-TAG-BIT-INT
+        FLOAT-TYPE : FLOAT-TAG-BIT-INT
+        DOUBLE-TYPE : DOUBLE-TAG-BIT-INT
     defmethod extern-address (this, id:Int) :
       extern-address(dylibs, id)
     defmethod extern-defn-address (this, id:Int) :

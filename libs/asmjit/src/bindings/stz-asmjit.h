@@ -82,6 +82,7 @@ extern "C" {
   void assembler_tzcnt_reg(Assembler *a, const Gp *dst, const Gp *src);
   void assembler_bt_reg(Assembler *a, const Gp *dst, const Gp *src);
   void assembler_bt_ptr_reg(Assembler *a, MemPtr *dst, const Gp *src);
+  void assembler_bts_int(Assembler *a, const Gp *dst, int src);
   void assembler_bts_reg(Assembler *a, const Gp *dst, const Gp *src);
   void assembler_bts_ptr_reg(Assembler *a, MemPtr *dst, const Gp *src);
   void assembler_btr_reg(Assembler *a, const Gp *dst, const Gp *src);

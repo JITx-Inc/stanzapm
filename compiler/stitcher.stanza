@@ -60,7 +60,7 @@ Removal strategies for each construct:
   TagImm:
     Becomes integer immediates.
     Requires each class to have an integer tag assigned to it.
-    If it is a marker, then becomes (marker-ref-bits << 48L) | tag
+    If it is a marker, then becomes (marker-ref-bits << 46L) | tag
     If it is not a marker, then becomes tag.
   StackMap:
     Becomes an integer immediate.

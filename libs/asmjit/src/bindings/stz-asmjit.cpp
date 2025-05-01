@@ -179,6 +179,9 @@ void assembler_bt_reg(Assembler *a, const Gp *dst, const Gp *src) {
 void assembler_bt_ptr_reg(Assembler *a, MemPtr *ptr, const Gp *src) {
   a->bt(ptr->value, *src);
 }
+void assembler_bts_int(Assembler *a, const Gp *dst, int src) {
+  a->bts(*dst, src);
+}
 void assembler_bts_reg(Assembler *a, const Gp *dst, const Gp *src) {
   a->bts(*dst, *src);
 }

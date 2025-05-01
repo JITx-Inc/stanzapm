@@ -76,6 +76,7 @@ extern assembler_ashr_reg: (ptr<?>, ptr<?>, ptr<?>) -> int
 extern assembler_tzcnt_reg: (ptr<?>, ptr<?>, ptr<?>) -> int
 extern assembler_bt_reg: (ptr<?>, ptr<?>, ptr<?>) -> int
 extern assembler_bt_ptr_reg: (ptr<?>, ptr<?>, ptr<?>) -> int
+extern assembler_bts_int: (ptr<?>, ptr<?>, int) -> int
 extern assembler_bts_reg: (ptr<?>, ptr<?>, ptr<?>) -> int
 extern assembler_bts_ptr_reg: (ptr<?>, ptr<?>, ptr<?>) -> int
 extern assembler_btr_reg: (ptr<?>, ptr<?>, ptr<?>) -> int
@@ -685,6 +686,9 @@ public lostanza defn bt (a:ref<Assembler>, dst:ref<Gp>, src:ref<Gp>) -> ref<Gp> 
 public lostanza defn bt (a:ref<Assembler>, ptr:ref<MemPtr>, src:ref<Gp>) -> ref<Gp> :
   call-c assembler_bt_ptr_reg(a.value, ptr.value, src.value)
   return src
+public lostanza defn bts (a:ref<Assembler>, dst:ref<Gp>, src:ref<Int>) -> ref<Gp> :
+  call-c assembler_bts_int(a.value, dst.value, src.value)
+  return dst
 public lostanza defn bts (a:ref<Assembler>, dst:ref<Gp>, src:ref<Gp>) -> ref<Gp> :
   call-c assembler_bts_reg(a.value, dst.value, src.value)
   return dst

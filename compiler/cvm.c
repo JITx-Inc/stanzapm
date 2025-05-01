@@ -148,6 +148,7 @@
 #define TYPEOF_OPCODE 143
 #define JUMP_SET_OPCODE 144
 #define JUMP_TAGBITS_OPCODE 240
+#define JUMP_TAGBITS_DOUBLE_OPCODE 254
 #define JUMP_TAGWORD_OPCODE 242
 #define GOTO_OPCODE 145
 #define CONV_OPCODE_BYTE_FLOAT 146
@@ -168,10 +169,12 @@
 #define CONV_OPCODE_DOUBLE_LONG 161
 #define CONV_OPCODE_DOUBLE_FLOAT 162
 #define DETAG_OPCODE 163
+#define DETAG_OPCODE_DOUBLE 253
 #define TAG_OPCODE_BYTE 164
 #define TAG_OPCODE_CHAR 165
 #define TAG_OPCODE_INT 166
 #define TAG_OPCODE_FLOAT 167
+#define TAG_OPCODE_DOUBLE 252
 #define STORE_OPCODE_1 168
 #define STORE_OPCODE_4 169
 #define STORE_OPCODE_8 170
@@ -393,6 +396,7 @@ void init_opcode_names () {
   opcode_names[TYPEOF_OPCODE] = "TYPEOF_OPCODE";
   opcode_names[JUMP_SET_OPCODE] = "JUMP_SET_OPCODE";
   opcode_names[JUMP_TAGBITS_OPCODE] = "JUMP_TAGBITS_OPCODE";
+  opcode_names[JUMP_TAGBITS_DOUBLE_OPCODE] = "JUMP_TAGBITS_DOUBLE_OPCODE";
   opcode_names[JUMP_TAGWORD_OPCODE] = "JUMP_TAGWORD_OPCODE";
   opcode_names[GOTO_OPCODE] = "GOTO_OPCODE";
   opcode_names[CONV_OPCODE_BYTE_FLOAT] = "CONV_OPCODE_BYTE_FLOAT";
@@ -413,10 +417,12 @@ void init_opcode_names () {
   opcode_names[CONV_OPCODE_DOUBLE_LONG] = "CONV_OPCODE_DOUBLE_LONG";
   opcode_names[CONV_OPCODE_DOUBLE_FLOAT] = "CONV_OPCODE_DOUBLE_FLOAT";
   opcode_names[DETAG_OPCODE] = "DETAG_OPCODE";
+  opcode_names[DETAG_OPCODE_DOUBLE] = "DETAG_OPCODE_DOUBLE";
   opcode_names[TAG_OPCODE_BYTE] = "TAG_OPCODE_BYTE";
   opcode_names[TAG_OPCODE_CHAR] = "TAG_OPCODE_CHAR";
   opcode_names[TAG_OPCODE_INT] = "TAG_OPCODE_INT";
   opcode_names[TAG_OPCODE_FLOAT] = "TAG_OPCODE_FLOAT";
+  opcode_names[TAG_OPCODE_DOUBLE] = "TAG_OPCODE_DOUBLE";
   opcode_names[STORE_OPCODE_1] = "STORE_OPCODE_1";
   opcode_names[STORE_OPCODE_4] = "STORE_OPCODE_4";
   opcode_names[STORE_OPCODE_8] = "STORE_OPCODE_8";
@@ -610,12 +616,22 @@ void init_opcode_names () {
   stack_pointer = stk->stack_pointer; \
   stack_limit = (char*)(stk->frames) + stk->size;
 
-#define INT_TAG_BITS 0
-#define REF_TAG_BITS 1
-#define MARKER_TAG_BITS 2
-#define BYTE_TAG_BITS 3
-#define CHAR_TAG_BITS 4
-#define FLOAT_TAG_BITS 5
+//TODO: CHECK and FIX DOUBLE
+const uint64_t BASE_TAG_BIT = 46L;
+const uint64_t REF_TAG_BIT = 0L;
+const uint64_t INT_TAG_BIT = 0L;
+const uint64_t MARKER_TAG_BIT = 1L;
+const uint64_t BYTE_TAG_BIT = 2L;
+const uint64_t CHAR_TAG_BIT = 3L;
+const uint64_t FLOAT_TAG_BIT = 4L;
+const uint64_t DOUBLE_TAG_BIT = 5L;
+const uint64_t REF_TAG_BITS = 0L;
+const uint64_t INT_TAG_BITS = 1L << INT_TAG_BIT;
+const uint64_t MARKER_TAG_BITS = 1L << MARKER_TAG_BIT;
+const uint64_t BYTE_TAG_BITS = 1L << BYTE_TAG_BIT;
+const uint64_t CHAR_TAG_BITS = 1L << CHAR_TAG_BIT;
+const uint64_t FLOAT_TAG_BITS = 1L << FLOAT_TAG_BIT;
+const uint64_t DOUBLE_TAG_BITS_MIN = 1L << DOUBLE_TAG_BIT;
 
 #define FALSE_TYPE 0
 #define TRUE_TYPE 1
@@ -623,17 +639,18 @@ void init_opcode_names () {
 #define CHAR_TYPE 3
 #define INT_TYPE 4
 #define FLOAT_TYPE 5
-#define STACK_TYPE 6
-#define FN_TYPE 7
-#define TYPE_TYPE 8
-#define LIVENESS_TRACKER_TYPE 9
+#define DOUBLE_TYPE 6
+#define STACK_TYPE 7
+#define FN_TYPE 8
+#define TYPE_TYPE 9
+#define LIVENESS_TRACKER_TYPE 10
 
 #define EXTEND_HEAP_FN 0
 #define EXTEND_STACK_FN 1
 #define INIT_CONSTS_FN 2
 #define EXECUTE_TOPLEVEL_COMMAND_FN 3
 
-#define BOOLREF(x) (((x) << 3) + MARKER_TAG_BITS)
+#define BOOLREF(x) ((x) + MARKER_TAG_BITS)
 
 #define SYSTEM_RETURN_STUB -2
 
@@ -805,11 +822,11 @@ static inline void barriered_store (const VMState* vms, uint64_t* address, uint6
 //============================================================
 
 Stack* untag_stack (uint64_t current_stack){
-  return (Stack*)(current_stack - 1 + 8);
+  return (Stack*)(current_stack + 8);
 }
 
 uint64_t ptr_to_ref (void* p){
-  return (uint64_t)p + REF_TAG_BITS;
+  return (uint64_t)p;
 }
 
 //long iprint_start;
@@ -988,7 +1005,7 @@ void vmloop (VMState* vms, uint64_t stanza_crsp, int64_t starting_fid){
     case CALL_CLOSURE_OPCODE : {
       DECODE_C();
       int num_locals = y;
-      Function* clo = (Function*)(LOCAL(value) - REF_TAG_BITS + 8);
+      Function* clo = (Function*)(LOCAL(value) + 8);
       uint64_t fid = clo->code;
       uint64_t fpos = code_offsets[fid];
       PUSH_FRAME(num_locals);
@@ -1013,7 +1030,7 @@ void vmloop (VMState* vms, uint64_t stanza_crsp, int64_t starting_fid){
     }
     case TCALL_CLOSURE_OPCODE : {
       DECODE_A_UNSIGNED();
-      Function* clo = (Function*)(LOCAL(value) - REF_TAG_BITS + 8);
+      Function* clo = (Function*)(LOCAL(value) + 8);
       uint64_t fid = clo->code;
       uint64_t fpos = code_offsets[fid];
       pc = instructions + fpos;
@@ -1674,7 +1691,7 @@ void vmloop (VMState* vms, uint64_t stanza_crsp, int64_t starting_fid){
     }
     case DEREF_OPCODE : {
       DECODE_B_UNSIGNED();
-      SET_LOCAL(x, LOCAL(value) + 8 - REF_TAG_BITS);
+      SET_LOCAL(x, LOCAL(value) + 8);
       continue;
     }
     case TYPEOF_OPCODE : {
@@ -1690,17 +1707,23 @@ void vmloop (VMState* vms, uint64_t stanza_crsp, int64_t starting_fid){
     }
     case JUMP_TAGBITS_OPCODE : {
       DECODE_F();
-      int tagbits = (int)(LOCAL(x)) & 0x7;
+      int tagbits = (int)(LOCAL(x) >> BASE_TAG_BIT);
       int bits = y;
       F_JUMP(tagbits == bits);
+    }
+    case JUMP_TAGBITS_DOUBLE_OPCODE : {
+      DECODE_F();
+      int tagbits = (int)(LOCAL(x) >> BASE_TAG_BIT);
+      int bits = y;
+      F_JUMP(tagbits > DOUBLE_TAG_BITS_MIN);
     }
     case JUMP_TAGWORD_OPCODE : {
       DECODE_F();
       uint64_t obj = LOCAL(x);
-      int tagbits = (int)obj & 0x7;
+      int tagbits = (int)(obj >> BASE_TAG_BIT);
       int tag = LOCAL(y);
-      if(tagbits == 1){
-        int* p = (int*)(obj - 1);
+      if(tagbits == 0){
+        int* p = (int*)(obj);
         F_JUMP(*p == tag);
       }else{
         pc = pc0 + (n2 * 4);
@@ -1799,27 +1822,37 @@ void vmloop (VMState* vms, uint64_t stanza_crsp, int64_t starting_fid){
     }
     case DETAG_OPCODE : {
       DECODE_B_UNSIGNED();
-      SET_LOCAL(x, LOCAL(value) >> 32LL);
+      SET_LOCAL(x, (uint32_t)(LOCAL(value)));
       continue;
+    }
+    case DETAG_OPCODE_DOUBLE : {
+      DECODE_B_UNSIGNED();
+      SET_LOCAL(x, ~((uint64_t)LOCAL(value)));
+
     }
     case TAG_OPCODE_BYTE : {
       DECODE_B_UNSIGNED();
-      SET_LOCAL(x, ((uint64_t)(uint8_t)(LOCAL(value)) << 32LL) + BYTE_TAG_BITS);
+      SET_LOCAL(x, ((uint64_t)(uint8_t)(LOCAL(value))) + BYTE_TAG_BITS);
       continue;
     }
     case TAG_OPCODE_CHAR : {
       DECODE_B_UNSIGNED();
-      SET_LOCAL(x, ((uint64_t)(uint8_t)(LOCAL(value)) << 32LL) + CHAR_TAG_BITS);
+      SET_LOCAL(x, ((uint64_t)(uint8_t)(LOCAL(value))) + CHAR_TAG_BITS);
       continue;
     }
     case TAG_OPCODE_INT : {
       DECODE_B_UNSIGNED();
-      SET_LOCAL(x, ((uint64_t)LOCAL(value) << 32LL) + INT_TAG_BITS);
+      SET_LOCAL(x, ((uint64_t)LOCAL(value)) + INT_TAG_BITS);
       continue;
     }
     case TAG_OPCODE_FLOAT : {
       DECODE_B_UNSIGNED();
-      SET_LOCAL(x, ((uint64_t)LOCAL(value) << 32LL) + FLOAT_TAG_BITS);
+      SET_LOCAL(x, ((uint64_t)LOCAL(value)) + FLOAT_TAG_BITS);
+      continue;
+    }
+    case TAG_OPCODE_DOUBLE : {
+      DECODE_B_UNSIGNED();
+      SET_LOCAL(x, ~((uint64_t)LOCAL(value)));
       continue;
     }
     case STORE_OPCODE_1 : {
@@ -2328,13 +2361,16 @@ int PRIM_TYPEIDS[] = {INT_TYPE, 0, 0, BYTE_TYPE, CHAR_TYPE, FLOAT_TYPE};
 
 int argtype (VMState* vms, int i){
   uint64_t x = vms->registers[i];
-  int tagbits = (int)x & 0x7;
+  int tagbits = (int)(x >> BASE_TAG_BIT);
   if(tagbits == REF_TAG_BITS){
-    int* p = (int*)(x - 1);
+    int* p = (int*)(x);
     return *p;
   }
   else if(tagbits == MARKER_TAG_BITS){
-    return (int)(x >> 3);
+    return (int)(x);
+  }
+  else if(tagbits > DOUBLE_TAG_BITS_MIN){
+    return DOUBLE_TYPE;
   }
   else{
     return PRIM_TYPEIDS[tagbits];

@@ -113,10 +113,10 @@ public defmulti match-format (r:EncodingResolver, branches:Tuple<Tuple<TypeSet>>
 public defmulti method-format (r:EncodingResolver, multi:Int, num-header-args:Int, num-args:Int) -> Int
 
 ;Return the integer encoding for a marker of the given type.
-public defmulti marker (r:EncodingResolver, type:Int) -> Int
+public defmulti marker (r:EncodingResolver, type:Int) -> Long
 
 ;Return the integer encoding for the void marker.
-public defmulti void-marker (r:EncodingResolver) -> Int
+public defmulti void-marker (r:EncodingResolver) -> Long
 
 ;Return the tagbits added to pointers to convert a raw-pointer into a Stanza heap reference.
 public defmulti ref-offset (r:EncodingResolver) -> Int
@@ -129,6 +129,9 @@ public defmulti marker? (r:EncodingResolver, n:Int) -> True|False
 
 ;Return the tagbits used for the given primitive types: Byte, Char, Int, Float.
 public defmulti tagbits (r:EncodingResolver, typeid:Int) -> Int
+
+;Return the tagbit used for the given primitive types: Byte, Char, Int, Float.
+public defmulti tagbit (r:EncodingResolver, typeid:Int) -> Int
 
 ;Return the address of the given extern address.
 public defmulti extern-address (r:EncodingResolver, id:Int) -> Long  

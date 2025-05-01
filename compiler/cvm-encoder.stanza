@@ -319,6 +319,7 @@ public defn encode (func:VMFunction,
             CHAR-TYPE : compare-tag-bits(CHAR-TYPE)
             INT-TYPE : compare-tag-bits(INT-TYPE)
             FLOAT-TYPE :  compare-tag-bits(FLOAT-TYPE)
+            DOUBLE-TYPE :  compare-double-tag-bits(DOUBLE-TYPE)
             else :
               if marker?(resolver, tag) : compare-marker(tag)
               else : compare-tag-word(tag)
@@ -326,6 +327,10 @@ public defn encode (func:VMFunction,
           within delayed-ins(2 + words-for-to-local(x)) :
             val bits = tagbits(resolver,typeid)
             emit-ins-f(JUMP-TAGBITS-OPCODE, to-local(x,0), bits, jump-offset(n1), jump-offset(n2))
+        defn compare-double-tag-bits (typeid:Int) :
+          within delayed-ins(2 + words-for-to-local(x)) :
+            val bits = tagbits(resolver,typeid)
+            emit-ins-f(JUMP-TAGBITS-DOUBLE-OPCODE, to-local(x,0), bits, jump-offset(n1), jump-offset(n2))
         defn compare-marker (typeid:Int) :
           emit-ins(Branch2Ins(n1, n2, EqOp(), x, Marker(typeid)))
         defn compare-tag-word (typeid:Int) :

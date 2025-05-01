@@ -824,14 +824,13 @@ defn AsmGen (code:CodeHolder,
   ;This is done by removing the tagbit and then incrementing past the header
   ;word of the object.
   defn untag-ref-to-struct-pointer (dst:Gp) -> False :
-    add(a, dst, object-header-size(resolver) - ref-offset(resolver))
+    add(a, dst, object-header-size(resolver))
     false
 
   ;Emit instructions to add the given tagbits to the
   ;LoStanza value held in x.
   defn add-tag (x:Gp, tag:Int) :
-    shl(a, x, 32)
-    add(a, x, tag) when tag != 0
+    bts(a, x, tag)
 
   ;Jump to function with id 'func-id + add-to-id'.
   ;- add-to-id: Meant to be used by method dispatch.
@@ -1085,8 +1084,7 @@ defn AsmGen (code:CodeHolder,
   ;  x = x to ref<True|False>
   ;Where x is either 1 or 0.
   defn bit-to-boolref (x:Gp) -> False :
-    shl(a, x, 3)
-    add(a, x, marker(resolver,0))
+    bts(a, x, to-int(BASE-TAG-BIT + MARKER-TAG-BIT))
     false
 
   ;Emit instructions for:
@@ -1433,11 +1431,8 @@ defn AsmGen (code:CodeHolder,
         val marker-targets? = not marker-targets.empty?
         val ref-targets? = not ref-targets.empty?
 
-        ;Checking for primitives or references requires knowing the tag bits.
-        ;So create the tag bits if we have either case.
-        if prim-targets? or ref-targets? :
-          a.mov(reg(BITS), object)
-          a.and-op(reg(BITS), 7)
+        a.mov(reg(BITS), object)
+        a.shr(reg(BITS), to-int(BASE-TAG-BIT))
 
         ;Jump to the appropriate primitive target if the object
         ;is one of the given primitives.
@@ -1446,16 +1441,17 @@ defn AsmGen (code:CodeHolder,
           val target = entry.value
           val tagbits = resolver.tagbits(x)
           a.cmp(reg(BITS), tagbits)
-          a.je(target)
+          if x == DOUBLE-TYPE :
+            a.jge(target)
+          else :
+            a.je(target)
 
-        ;Skip the reference branches if the object is not a reference.
-        val label-after-refs = marker-branches when marker-targets?
-                          else default-target
+        if marker-targets? :
+          a.cmp(reg(BITS), to-int(MARKER-TAG-BITS))
+          a.jne(marker-branches)
         if ref-targets? :
-          a.cmp(reg(BITS), 1)
-          a.jne(label-after-refs)
-        else if not marker-targets? :
-          a.jmp(label-after-refs)
+          a.jmp(default-target)
+
 
         ;Jump to the appropriate reference branches if the object
         ;is one of the given references
@@ -1465,7 +1461,7 @@ defn AsmGen (code:CodeHolder,
               val tag-word = e.key
               tag-word => e.value
           a.bind(ref-branches)
-          a.mov(reg(TAG), MemPtr(object, -1))
+          a.mov(reg(TAG), MemPtr(object, 0))
           let loop (tree:BinaryNode<Label> = ref-tree()) :
             match(tree) :
               (tree:InnerNode<Label>) :
@@ -1486,10 +1482,9 @@ defn AsmGen (code:CodeHolder,
         ;Jump to the appropriate marker branches if the object is one
         ;of the given marker branches.
         if marker-targets? :
+          a.and-op(object, 0xffffffff) ; TODO: COULD REMOVE
           defn marker-tree () :
-            BinaryNode $ for e in marker-targets seq :
-              val marker-int = resolver.marker(e.key)
-              marker-int => e.value
+            BinaryNode $ marker-targets
           a.bind(marker-branches)
           let loop (tree:BinaryNode<Label> = marker-tree()) :
             match(tree) :
@@ -1577,7 +1572,7 @@ defn AsmGen (code:CodeHolder,
       mov(a, reg(Tmp1), to-long(type))
       mov(a, MemPtr(reg(Tmp2),0), reg(Tmp1))
       ;Let Tmp1 = heap-top + ref-tag-bits
-      lea(a, reg(Tmp1), MemPtr(reg(Tmp2), ref-offset(resolver)))
+      lea(a, reg(Tmp1), MemPtr(reg(Tmp2), 0))
       set-local(slot, reg(Tmp1), 8)
       ;Tmp2 = Tmp2 + size
       val header-size = object-header-size(resolver)
@@ -2023,27 +2018,35 @@ defn AsmGen (code:CodeHolder,
         set-local-float(x, xmm0, 8)
       TAG-OPCODE-BYTE :
         set-imm(reg(Tmp1), y)
-        add-tag(reg(Tmp1), tagbits(resolver,BYTE-TYPE))
+        add-tag(reg(Tmp1), tagbit(resolver,BYTE-TYPE))
         set-local(x, reg(Tmp1), 8)
       TAG-OPCODE-CHAR :
         set-imm(reg(Tmp1), y)
-        add-tag(reg(Tmp1), tagbits(resolver,CHAR-TYPE))
+        add-tag(reg(Tmp1), tagbit(resolver,CHAR-TYPE))
         set-local(x, reg(Tmp1), 8)
       TAG-OPCODE-INT :
         set-imm(reg(Tmp1), y)
-        add-tag(reg(Tmp1), tagbits(resolver,INT-TYPE))
+        add-tag(reg(Tmp1), tagbit(resolver,INT-TYPE))
         set-local(x, reg(Tmp1), 8)
       TAG-OPCODE-FLOAT :
         set-imm(reg(Tmp1), y)
-        add-tag(reg(Tmp1), tagbits(resolver,FLOAT-TYPE))
+        add-tag(reg(Tmp1), tagbit(resolver,FLOAT-TYPE))
+        set-local(x, reg(Tmp1), 8)
+      TAG-OPCODE-DOUBLE :
+        set-imm(reg(Tmp1), y)
+        not-op(a, reg(Tmp1))
+        set-local(x, reg(Tmp1), 8)
+      DETAG-OPCODE-DOUBLE :
+        set-imm(reg(Tmp1), y)
+        not-op(a, reg(Tmp1))
         set-local(x, reg(Tmp1), 8)
       DETAG-OPCODE :
         set-imm(reg(Tmp1), y)
-        ashr(a, reg(Tmp1), 32)
+        movsxd(a, reg(Tmp1), reg(Tmp1))
         set-local(x, reg(Tmp1), 8)
       DEREF-OPCODE :
         set-imm(reg(Tmp1), y)
-        add(a, reg(Tmp1), object-header-size(resolver) - ref-offset(resolver))
+        add(a, reg(Tmp1), object-header-size(resolver))
         set-local(x, reg(Tmp1), 8)
       GC-OPCODE :
         ;Let reg(Tmp1) = size
@@ -2674,17 +2677,21 @@ defn AsmGen (code:CodeHolder,
         BYTE-TYPE : compare-tag-bits(BYTE-TYPE)
         CHAR-TYPE : compare-tag-bits(CHAR-TYPE)
         INT-TYPE : compare-tag-bits(INT-TYPE)
-        FLOAT-TYPE :  compare-tag-bits(FLOAT-TYPE)
+        FLOAT-TYPE : compare-tag-bits(FLOAT-TYPE)
+        DOUBLE-TYPE : compare-tag-bits(DOUBLE-TYPE)
         else :
           if marker?(resolver, tag) : compare-marker(tag)
           else : compare-tag-word(tag)
     defn compare-tag-bits (typeid:Int) :
-      ;Let Tmp1 = x & 0x7
+      ;Let Tmp1 = x >> BASE-TAG-BIT
       set-imm(reg(Tmp1), x)
-      and-op(a, reg(Tmp1), 0x7)
+      shr(a, reg(Tmp1), to-int(BASE-TAG-BIT))
       ;goto n1 when Tmp1 == tagbits(typeid) else goto n2
       cmp(a, reg(Tmp1), tagbits(resolver,typeid))
-      je(a, get-label(n1))
+      if typeid == DOUBLE-TYPE :
+        jge(a, get-label(n1))
+      else :
+        je(a, get-label(n1))
       jmp(a, get-label(n2))
     defn compare-marker (typeid:Int) :
       emit-ins(Branch2Ins(n1, n2, EqOp(), x, Marker(typeid)))
@@ -2693,15 +2700,15 @@ defn AsmGen (code:CodeHolder,
       val n1-label = get-label(n1)
       val n2-label = get-label(n2)
       ;Let Tmp1 = x
-      ;Let Tmp2 = x & 0x7
+      ;Let Tmp2 = x >> BASE-TAG-BIT
       set-imm(reg(Tmp1), x)
       mov(a, reg(Tmp2), reg(Tmp1))
-      and-op(a, reg(Tmp2), 0x7)
-      ;Goto n2 when Tmp2 != 1
-      cmp(a, reg(Tmp2), 1)
+      shr(a, reg(Tmp2), to-int(BASE-TAG-BIT))
+      ;Goto n2 when Tmp2 != 0
+      cmp(a, reg(Tmp2), 0)
       jne(a, n2-label)
       ;Tmp1 = [x - 1] (Read the header word)
-      mov(a, reg(Tmp1), MemPtr(reg(Tmp1), (- ref-offset(resolver)), SIZEOF-LONG))
+      mov(a, reg(Tmp1), MemPtr(reg(Tmp1), 0, SIZEOF-LONG))
       ;Goto n1 when Tmp1 == typeid else goto n2
       cmp(a, reg(Tmp1), typeid)
       je(a, n1-label)
@@ -2739,7 +2746,7 @@ defn AsmGen (code:CodeHolder,
         set-regs(ys(ins))
         ;Load Tmp2 = func.code
         set-imm(reg(Tmp2), f(ins))
-        mov(a, reg(Tmp2), MemPtr(reg(Tmp2), object-header-size(resolver) + FUNCTION-CODE-OFFSET - ref-offset(resolver)))
+        mov(a, reg(Tmp2), MemPtr(reg(Tmp2), object-header-size(resolver) + FUNCTION-CODE-OFFSET))
         goto-function(reg(Tmp2), 0)            
 
       (ins:CallIns) :
@@ -2753,7 +2760,7 @@ defn AsmGen (code:CodeHolder,
         set-regs(ys(ins))
         ;Load Tmp2 = func.code
         set-imm(reg(Tmp2), f(ins))
-        mov(a, reg(Tmp2), MemPtr(reg(Tmp2), object-header-size(resolver) + FUNCTION-CODE-OFFSET - ref-offset(resolver)))
+        mov(a, reg(Tmp2), MemPtr(reg(Tmp2), object-header-size(resolver) + FUNCTION-CODE-OFFSET))
         val ret = call-from-jit-context(reg(Tmp2))
         get-regs(xs(ins))
         record-trace-entry(ret, trace-entry(ins))        
@@ -2815,7 +2822,7 @@ defn AsmGen (code:CodeHolder,
       (ins:StoreIns) :
         ;Compute the offset from x depending upon whether x is a Ref or a pointer.
         val offset* = match(imm-type(x(ins))) :
-          (xt:VMRef) : offset(ins) - ref-offset(resolver) + object-header-size(resolver)
+          (xt:VMRef) : offset(ins) + object-header-size(resolver)
           (xt) : offset(ins)
         ;Determine whether we have a variable-offset.
         match(y(ins)) :
@@ -2840,7 +2847,7 @@ defn AsmGen (code:CodeHolder,
 
       (ins:StoreWithBarrierIns) :
         ;Compute the offset from x depending upon whether x is a Ref or a pointer.
-        val offset* = offset(ins) - ref-offset(resolver) + object-header-size(resolver)
+        val offset* = offset(ins) + object-header-size(resolver)
         
         ;Store z into a local so we can retrieve it without using additional registers.
         val z* = to-local(z(ins), 2)
@@ -2873,7 +2880,7 @@ defn AsmGen (code:CodeHolder,
       (ins:LoadIns) :
         ;Compute the offset from y depending upon whether y is a Ref or a pointer.
         val offset* = match(imm-type(y(ins))) :
-          (yt:VMRef) : offset(ins) - ref-offset(resolver) + object-header-size(resolver)
+          (yt:VMRef) : offset(ins) + object-header-size(resolver)
           (yt) : offset(ins)
         ;Determine whether we have a variable-offset.
         match(z(ins)) :
