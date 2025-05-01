@@ -1192,6 +1192,7 @@ public val CORE-COLLECT-STACK-TRACE-ID = register $ core-fnid(`collect-stack-tra
 public val CORE-COLLECT-GARBAGE-ID = register $ core-fnid(`collect-garbage, [`long])
 public val CORE-MAKE-STRING-ID = register $ core-fnid(`String, [DPtrT(DByte())])
 public val CORE-EXECUTE-TOPLEVEL-COMMAND-ID = register $ core-fnid(`execute-toplevel-command, [DArrow([], core-type(`False))])
+public val CORE-PROFILE-STACK-TRACE-ID = register $ core-fnid(`profile-stack-trace)
 
 ;============================================================
 ;====================== ID Environment ======================

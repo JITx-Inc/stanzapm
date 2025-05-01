@@ -79,6 +79,8 @@ public defstruct BuildStmt <: ProjStmt :
   ccflags: Tuple<String|Tuple<String>>
   flags: Tuple<Symbol>
   optimize: True|False
+  profile: True|False
+  coverage: True|False
 with:
   printer => true
 

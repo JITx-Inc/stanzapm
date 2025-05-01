@@ -22,6 +22,8 @@ public defstruct BuildSettings :
   build-from-source?: True|False
   optimize?: True|False
   debug?: True|False
+  profile?: True|False
+  coverage?: True|False
   ccfiles: Tuple<String>
   ccflags: Tuple<String|Tuple<String>>
   flags: Tuple<Symbol>

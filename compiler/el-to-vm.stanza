@@ -61,7 +61,7 @@ public defn compile (epackage:EPackage, debug?:True|False) -> VMPackage :
       val init = compile-init(init-compiler, iotable, progbuffer)
       init
 
-    val vmp = to-vmpackage(progbuffer, io, init)
+    val vmp = to-vmpackage(progbuffer, io, init, function-info(epackage))
     ;dump(vmp, "logs", "pre-analyze")
     val vmp* = within time-ms!("VM Analyze") : analyze(vmp)
     ;dump(vmp*, "logs", false)
@@ -565,7 +565,7 @@ defmulti add (b:ProgBuffer, e:VMMethod) -> False
 defmulti add (b:ProgBuffer, e:VMDebugInfo) -> False
 defmulti add (b:ProgBuffer, e:SafepointEntry) -> SafepointIns
 defmulti add (b:ProgBuffer, e:VMDebugName) -> False
-defmulti to-vmpackage (b:ProgBuffer, io:PackageIO, init:Int|False) -> VMPackage
+defmulti to-vmpackage (b:ProgBuffer, io:PackageIO, init:Int|False, function-info:False|Tuple<FunctionInfo>) -> VMPackage
 
 defn ProgBuffer () :
   val globals = Vector<VMGlobal>()
@@ -591,7 +591,7 @@ defn ProgBuffer () :
     defmethod add (this, e:VMDebugInfo) : add(debug, e)
     defmethod add (this, e:SafepointEntry) : add(sptable, e)
     defmethod add (this, e:VMDebugName) : add(debugnames, e)
-    defmethod to-vmpackage (this, io:PackageIO, init:Int|False) :
+    defmethod to-vmpackage (this, io:PackageIO, init:Int|False, function-info:False|Tuple<FunctionInfo>) :
       VMPackage(io, init,
                 to-tuple(globals),
                 to-tuple(datas),
@@ -603,6 +603,7 @@ defn ProgBuffer () :
                 to-tuple(extern-defns),
                 VMDebugNameTable(to-tuple(debugnames)),
                 VMDebugInfoTable(to-tuple(debug)),
+                function-info
                 compile(sptable))
 
 ;============================================================
@@ -1544,6 +1545,8 @@ defn Compiler (gt:GlobalTable,
           (info:StackTraceInfo) :
             make-safepoint(info) when /info(info) is-not False
           (f:False) : false
+      (ins:EProfile) :
+        emit(ProfileIns(id(ins), kind(ins)))
 
   ;---------------------------------------------------------
   ;--------------- Create the Compiler Type ----------------
