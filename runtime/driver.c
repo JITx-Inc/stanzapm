@@ -705,7 +705,7 @@ int stop_sample_profiling() {
 
 #else
 
-int start_sample_profiling (void *handler, int usecs) {
+int start_sample_profiling (int msecs, int num_functions_arg, uint64_t *profile_flag_arg, uint64_t *function_counters_arg) {
   return 0;
 }
 int stop_sample_profiling () {
@@ -800,8 +800,17 @@ STANZA_API_FUNC int MAIN_FUNC (int argc, char* argv[]) {
   VMInit init;
 
   //Allocate heap
-  const stz_long min_heap_size = ROUND_UP_TO_WHOLE_PAGES(8 * 1024 * 1024);
-  const stz_long max_heap_size = ROUND_UP_TO_WHOLE_PAGES(STZ_LONG(8) * 1024 * 1024 * 1024);
+  char* max_heap_gigs_var = getenv("STANZA_MAX_HEAP_SIZE");
+  stz_long max_heap_gigs = STZ_LONG(8);
+  if (max_heap_gigs_var != NULL) {
+    max_heap_gigs = atol(max_heap_gigs_var);
+    if (max_heap_gigs <= 0L) {
+      fprintf(stderr, "STANZA_MAX_HEAP_SIZE must be an integer number of gigabytes: %s\n", max_heap_gigs_var);
+      exit(-1);
+    }
+  }
+  const stz_long min_heap_size = ROUND_UP_TO_WHOLE_PAGES(STZ_LONG(8) * 1024 * 1024);
+  const stz_long max_heap_size = ROUND_UP_TO_WHOLE_PAGES(max_heap_gigs * 1024 * 1024 * 1024);
   init.heap_start = (stz_byte*)stz_memory_map(min_heap_size, max_heap_size);
   init.heap_max_size = max_heap_size;
   init.heap_size_limit = max_heap_size;
