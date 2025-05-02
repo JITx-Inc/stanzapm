@@ -233,88 +233,55 @@ protected lostanza deftype HeapStatistic :
 ;are used only in compiled mode.
 ;Permanent state changes in-between each code load.
 ;Variable state changes in-between each boundary change.
-#if-defined(BOOTSTRAP) :
+protected lostanza deftype HeapDominator :
+  var roots : ptr<LSLongVector>
+  var sizes : ptr<LSLongVector>
+  var addrs : ptr<LSLongVector>
+  var offs  : ptr<LSLongVector>
+  var heap  : ptr<LSLongVector>
 
-  protected lostanza deftype VMState :
-    ;Compiled and Interpreted Mode
-    global-offsets: ptr<long>   ;(Permanent State)
-    global-mem: ptr<byte>       ;(Permanent State)
-    var sig-handler: long       ;(Permanent State)
-    var current-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
-    var stepping-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
-    const-table: ptr<long>      ;(Permanent State)
-    const-mem: ptr<byte>        ;(Permanent State)
-    data-offsets: ptr<int>      ;(Permanent State)
-    data-mem: ptr<byte>         ;(Permanent State)
-    code-offsets: ptr<int>      ;(Permanent State)
-    registers: ptr<long>        ;(Permanent State)
-    system-registers: ptr<long> ;(Permanent State)
-    var heap: Heap              ;(Variable State)
-    safepoint-table: ptr<?>     ;(Variable State)
-    debug-table: ptr<?>         ;(Variable State)
-    local-var-table: ptr<?>     ;(Variable State)
-    ;Compiled Mode Tables
-    class-table: ptr<ClassDescriptor>
-    global-root-table: ptr<GlobalRoots>
-    stackmap-table: ptr<ptr<StackMap>>
-    stack-trace-table: ptr<StackTraceTable>
-    extern-table: ptr<ExternTable>
-    extern-defn-table: ptr<ExternDefnTable>
+protected lostanza deftype VMState :
+  ;Compiled and Interpreted Mode
+  global-offsets: ptr<long>   ;(Permanent State)
+  global-mem: ptr<byte>       ;(Permanent State)
+  var sig-handler: long       ;(Permanent State)
+  var current-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
+  var stepping-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
+  const-table: ptr<long>      ;(Permanent State)
+  const-mem: ptr<byte>        ;(Permanent State)
+  data-offsets: ptr<int>      ;(Permanent State)
+  data-mem: ptr<byte>         ;(Permanent State)
+  code-offsets: ptr<int>      ;(Permanent State)
+  registers: ptr<long>        ;(Permanent State)
+  system-registers: ptr<long> ;(Permanent State)
+  var heap: Heap              ;(Variable State)
+  safepoint-table: ptr<?>     ;(Variable State)
+  debug-table: ptr<?>         ;(Variable State)
+  local-var-table: ptr<?>     ;(Variable State)
+  heap-statistics: ptr<HeapStatistics> ;(Variable State) 
+  var dom: ptr<HeapDominator> ;(Variable State)
+  profile-flag: ptr<long>
+  var profile-buffer: ptr<LSLongVector>
+  function-counters: ptr<long>
+  function-info: ptr<FunctionInfoTable>
+  ;Compiled Mode Tables
+  class-table: ptr<ClassDescriptor>
+  global-root-table: ptr<GlobalRoots>
+  stackmap-table: ptr<ptr<StackMap>>
+  stack-trace-table: ptr<StackTraceTable>
+  extern-table: ptr<ExternTable>
+  extern-defn-table: ptr<ExternDefnTable>
 
-  lostanza defn initialize-dominator-tree () -> ref<False> :
-    return false
-
-#else:
-
-  protected lostanza deftype HeapDominator :
-    var roots : ptr<LSLongVector>
-    var sizes : ptr<LSLongVector>
-    var addrs : ptr<LSLongVector>
-    var offs  : ptr<LSLongVector>
-    var heap  : ptr<LSLongVector>
-
-  protected lostanza deftype VMState :
-    ;Compiled and Interpreted Mode
-    global-offsets: ptr<long>   ;(Permanent State)
-    global-mem: ptr<byte>       ;(Permanent State)
-    var sig-handler: long       ;(Permanent State)
-    var current-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
-    var stepping-coroutine-ptr: ptr<long> ;[TODO] Change to long to represent reference.
-    const-table: ptr<long>      ;(Permanent State)
-    const-mem: ptr<byte>        ;(Permanent State)
-    data-offsets: ptr<int>      ;(Permanent State)
-    data-mem: ptr<byte>         ;(Permanent State)
-    code-offsets: ptr<int>      ;(Permanent State)
-    registers: ptr<long>        ;(Permanent State)
-    system-registers: ptr<long> ;(Permanent State)
-    var heap: Heap              ;(Variable State)
-    safepoint-table: ptr<?>     ;(Variable State)
-    debug-table: ptr<?>         ;(Variable State)
-    local-var-table: ptr<?>     ;(Variable State)
-    heap-statistics: ptr<HeapStatistics> ;(Variable State) 
-    var dom: ptr<HeapDominator> ;(Variable State)
-    profile-flag: ptr<long>
-    var profile-buffer: ptr<LSLongVector>
-    function-counters: ptr<long>
-    function-info: ptr<FunctionInfoTable>
-    ;Compiled Mode Tables
-    class-table: ptr<ClassDescriptor>
-    global-root-table: ptr<GlobalRoots>
-    stackmap-table: ptr<ptr<StackMap>>
-    stack-trace-table: ptr<StackTraceTable>
-    extern-table: ptr<ExternTable>
-    extern-defn-table: ptr<ExternDefnTable>
-
-  lostanza defn initialize-dominator-tree () -> ref<False> :
-    val vms:ptr<core/VMState> = call-prim flush-vm()
-    val dom = (call-c clib/malloc(sizeof(HeapDominator))) as ptr<HeapDominator>
-    dom.roots = LSLongVector()
-    dom.sizes = LSLongVector()
-    dom.addrs = LSLongVector()
-    dom.offs  = LSLongVector()
-    dom.heap  = LSLongVector()
-    vms.dom   = dom
-    return false
+lostanza defn initialize-dominator-tree () -> ref<False> :
+  val vms:ptr<core/VMState> = call-prim flush-vm()
+  val dom = (call-c clib/malloc(sizeof(HeapDominator))) as ptr<HeapDominator>
+  dom.roots = LSLongVector()
+  dom.sizes = LSLongVector()
+  dom.addrs = LSLongVector()
+  dom.offs  = LSLongVector()
+  dom.heap  = LSLongVector()
+  vms.dom   = dom
+  return false
 
 lostanza deftype ExternTable :
   length: long
@@ -4283,15 +4250,11 @@ protected val uninitialized = new Uninitialized
 ;=================== Initialize Profiler ====================
 ;============================================================
 
-#if-defined(BOOTSTRAP) :
-  lostanza defn initialize-profiler () -> ref<False> :
-    return false
-#else :
-  lostanza defn initialize-profiler () -> ref<False> :
-    val vms:ptr<VMState> = call-prim flush-vm()
-    [vms.profile-flag] = 0L
-    vms.profile-buffer = LSLongVector(1 << 20)
-    return false
+lostanza defn initialize-profiler () -> ref<False> :
+  val vms:ptr<VMState> = call-prim flush-vm()
+  [vms.profile-flag] = 0L
+  vms.profile-buffer = LSLongVector(1 << 20)
+  return false
 
 ;============================================================
 ;=================== Initialize Remaining ===================
@@ -11257,40 +11220,38 @@ public defmulti name (t:TypeObject) -> String
 ;====================== Profiling ===========================
 ;============================================================
 
-#if-not-defined(BOOTSTRAP) :
+public var last-profiler-time:Long = 0L
 
-  public var last-profiler-time:Long = 0L
-
-  ;Called from app to record stack trace as return addresses in buffer
-  ;Demarcate end of each coroutine stack with -2 and end trace with -1
-  lostanza defn profile-stack-trace () -> ref<False> :
-    val vms:ptr<VMState> = call-prim flush-vm()
-    [vms.profile-flag] = 2L
-    val buffer = vms.profile-buffer
-    add(buffer, call-c clib/current_time_ms())
-    add(buffer, -2L) ; time marker
-    labels :
-      begin :
-        goto loop(current-coroutine)
-      loop (co:ref<RawCoroutine>) :
-        val stack = co.stack
-        val end-sp = stack.stack-pointer
-        labels :
-          begin : goto loop-frame(stack.frames)
-          loop-frame (sp:ptr<StackFrame>) :
-            if sp.return > 0L :
-              add(buffer, sp.return)
-            if sp < end-sp : ;Continue if we're not at the end of the stack
-              val map-index = sp.liveness-map
-              val stackmap = vms.stackmap-table[map-index]
-              goto loop-frame(sp + stackmap.size)
-        add(buffer, -2L) ;End coroutine stack marker
-        match(co.parent) :
-          (p:ref<RawCoroutine>) : goto loop(p)
-          (p:ref<False>) : ()
-    add(buffer, -1L) ;End stack trace marker 
-    [vms.profile-flag] = 0L
-    return false
+;Called from app to record stack trace as return addresses in buffer
+;Demarcate end of each coroutine stack with -2 and end trace with -1
+lostanza defn profile-stack-trace () -> ref<False> :
+  val vms:ptr<VMState> = call-prim flush-vm()
+  [vms.profile-flag] = 2L
+  val buffer = vms.profile-buffer
+  add(buffer, call-c clib/current_time_ms())
+  add(buffer, -2L) ; time marker
+  labels :
+    begin :
+      goto loop(current-coroutine)
+    loop (co:ref<RawCoroutine>) :
+      val stack = co.stack
+      val end-sp = stack.stack-pointer
+      labels :
+        begin : goto loop-frame(stack.frames)
+        loop-frame (sp:ptr<StackFrame>) :
+          if sp.return > 0L :
+            add(buffer, sp.return)
+          if sp < end-sp : ;Continue if we're not at the end of the stack
+            val map-index = sp.liveness-map
+            val stackmap = vms.stackmap-table[map-index]
+            goto loop-frame(sp + stackmap.size)
+      add(buffer, -2L) ;End coroutine stack marker
+      match(co.parent) :
+        (p:ref<RawCoroutine>) : goto loop(p)
+        (p:ref<False>) : ()
+  add(buffer, -1L) ;End stack trace marker 
+  [vms.profile-flag] = 0L
+  return false
 
 ;############################################################
 ;################## Math Package ############################
