@@ -688,6 +688,12 @@ typedef struct{
   void* safepoint_table;
   void* debug_table;
   void* local_var_table;
+  void* heap_statistics;
+  void* heap_dominator_tree;
+  void* profile_flag;
+  void* profile_buffer;
+  void* function_counters;
+  void* function_info;
   uint64_t* class_table;       //(Permanent State)
   //Interpreted Mode Tables
   char* instructions;          //(Permanent State)
