@@ -7,6 +7,7 @@ defpackage stz/code-table :
   import stz/vm-structures
   import stz/trace-info
   import stz/branch-dag
+  import stz/vm-ids
 
 ;============================================================
 ;===================== Code Table ===========================
@@ -30,6 +31,7 @@ public deftype CodeTable
 public defmulti load-function (t:CodeTable,
                                fid:Int,
                                func:VMFunction,
+                               rec:CodeRec|False,
                                externfn?:True|False,
                                resolver:EncodingResolver,
                                backend:Backend) -> LoadedFunction

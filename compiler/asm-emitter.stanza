@@ -425,7 +425,7 @@ defn gen (os:OutputStream, ins:Ins, backend:Backend) :
             #println(os, "   leaq (%_ + %_)(%%rip), %_" % [#lbl(y), offset(y), #imm(t,x)])
          (y) :
             if #i(t) :
-              if x != y :
+              if (t is-not LongT) or x != y :
                 #println(os, "   mov%_ %_, %_" % [size-suffix(t), #imm(t,y), #imm(t,x)])
             else if #f(t) : #println(os, "   movs%_ %_, %_" % [size-suffix(t), #imm(t,y), #imm(t,x)])
             else : fatal("Unreachable")

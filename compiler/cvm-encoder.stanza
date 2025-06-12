@@ -67,39 +67,39 @@ public defn encode (func:VMFunction,
   defn ten-bits! (x:Int) :
     fatal("Local out of range: %_" % [x]) when x < 0 or x >= 1024
   defn emit-ins-a (opcode:Int, value:Int) :
-    ;println("%_) A: [%_ | %_]" % [write-position(buffer), opcode, value])
+    ; println("%_) A: [%_ (%_) | %_]" % [write-position(buffer), OPCODE-NAMES[opcode], opcode, value])
     put(buffer, opcode | (value << 8))
   defn emit-ins-b (opcode:Int, x:Int, value:Int) :
     ten-bits!(x)
-    ;println("%_) B: [%_ | %_ | %_]" % [write-position(buffer), opcode, x, value])
+    ; println("%_) B: [%_ (%_) | %_ | %_]" % [write-position(buffer), OPCODE-NAMES[opcode], opcode, x, value])
     put(buffer, opcode | (x << 8) | (value << 18))
   defn emit-ins-c (opcode:Int, x:Int, value:Int) :
     ten-bits!(x)
-    ;println("%_) C: [%_ | _ | %_ | %_]" % [write-position(buffer), opcode, x, value])
+    ; println("%_) C: [%_ (%_) | _ | %_ | %_]" % [write-position(buffer), OPCODE-NAMES[opcode], opcode, x, value])
     put(buffer, opcode | (x << 22))
     put(buffer, value)
   defn emit-ins-c (opcode:Int, x:Int, y:Int, value:Int) :
     ten-bits!(x)
     ten-bits!(y)
-    ;println("%_) C: [%_ | %_ | %_ | %_]" % [write-position(buffer), opcode, x, y, value])
+    ; println("%_) C: [%_ (%_) | %_ | %_ | %_]" % [write-position(buffer), OPCODE-NAMES[opcode], opcode, x, y, value])
     put(buffer, opcode | (x << 8) | (y << 22))
     put(buffer, value)
   defn emit-ins-d (opcode:Int, x:Int, value:Long) :
     ten-bits!(x)
-    ;println("%_) D: [%_ | _ | %_] + %~" % [write-position(buffer), opcode, x, value])
+    ; println("%_) D: [%_ (%_) | _ | %_] + %~" % [write-position(buffer), OPCODE-NAMES[opcode], opcode, x, value])
     put(buffer, opcode | (x << 22))
     put(buffer, value)
   defn emit-ins-e (opcode:Int, x:Int, y:Int, z:Int, const:Int) :
     ten-bits!(x)
     ten-bits!(y)
     ten-bits!(z)
-    ;println("%_) E: [%_ | %_ | %_ | %_ | %_]" % [write-position(buffer), opcode, x, y, z, const])
+    ; println("%_) E: [%_ (%_) | %_ | %_ | %_ | %_]" % [write-position(buffer), OPCODE-NAMES[opcode], opcode, x, y, z, const])
     put(buffer, opcode | (x << 8) | (y << 18) | (z << 28))
     put(buffer, (z >> 4) | (const << 6))
   defn emit-ins-f (opcode:Int, x:Int, y:Int, n1:Int, n2:Int) :
     ten-bits!(x)
     ten-bits!(y)
-    ;println("%_) F: [%_ | %_ | %_ | %_ | %_]" % [write-position(buffer), opcode, x, y, n1, n2])
+    ; println("%_) F: [%_ (%_) | %_ | %_ | %_ | %_]" % [write-position(buffer), OPCODE-NAMES[opcode], opcode, x, y, n1, n2])
     put(buffer, opcode | (x << 8) | (y << 18) | (n1 << 28))
     put(buffer, ((n1 & 0x3FFFF) >> 4) | (n2 << 14))
   defn emit-ins-targets (dests:Tuple<Int>) :
@@ -318,8 +318,8 @@ public defn encode (func:VMFunction,
             BYTE-TYPE : compare-tag-bits(BYTE-TYPE)
             CHAR-TYPE : compare-tag-bits(CHAR-TYPE)
             INT-TYPE : compare-tag-bits(INT-TYPE)
-            FLOAT-TYPE :  compare-tag-bits(FLOAT-TYPE)
-            DOUBLE-TYPE :  compare-double-tag-bits(DOUBLE-TYPE)
+            FLOAT-TYPE : compare-tag-bits(FLOAT-TYPE)
+            DOUBLE-TYPE : compare-double-tag-bits(DOUBLE-TYPE)
             else :
               if marker?(resolver, tag) : compare-marker(tag)
               else : compare-tag-word(tag)

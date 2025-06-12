@@ -2778,14 +2778,6 @@ lostanza defn LivenessTracker (value:ref<Unique>, heap:ptr<Heap>) -> ref<Livenes
   return tracker
 
 
-#if-defined(BOOTSTRAP) :
-
-  lostanza val false-marker:long = tagof(False) << 3L + 2
-
-#else :
-
-  lostanza val false-marker:long = tagof(False) | (MARKER-TAG-BITS << BASE-TAG-BIT)
-
 ;Scan through heap.liveness-trackers and update them.
 ;After this function finishes:
 ;1) All heap.liveness-trackers will have their 'value' field appropriately updated.
@@ -3002,6 +2994,11 @@ lostanza val CHAR-TYPE:int = 3
 lostanza val INT-TYPE:int = 4
 lostanza val FLOAT-TYPE:int = 5
 lostanza val DOUBLE-TYPE:int = 6
+
+#if-defined(BOOTSTRAP) :
+  lostanza val false-marker:long = tagof(False) << 3L + 2
+#else :
+  lostanza val false-marker:long = (tagof(False) | (MARKER-TAG-BITS << BASE-TAG-BIT))
 
 public lostanza val null:ptr<?> = 0L as ptr<?>
 
@@ -4361,6 +4358,7 @@ public lostanza defn object-type (x:ref<?>) -> ref<String> :
 ;Constants have to be initialized before LS-NL and NL. Strings
 ;do not behave properly until after initialize-constants().
 initialize-heap-callback-routines()
+
 initialize-constants()
 
 ;============================================================

@@ -81,7 +81,7 @@ defn lower (epackage:EPackage, optimize?:True|False, profile?:True|False, covera
       within log-time(EL-TIMERS[pass-name], /suffix(name(epackage))) :
         cur-package = f(cur-package)
         update-tables() when update-tables?
-      dump(cur-package, "logs", suffix)
+      ; dump(cur-package, "logs", suffix)
       #if-not-defined(OPTIMIZE) :
         ensure-unique-identifiers!(cur-package)
     defn run-pass (pass-name:String, f:(EPackage, IOTable) -> EPackage, suffix:String, update-tables?:True|False) :
@@ -3840,6 +3840,7 @@ defn trace-if (inz:PeekSeq<[Int,EIns]>, i:Int) :
 defn match-if-match (inz:PeekSeq<[Int,EIns]>, vt:VarTable) -> Maybe<InsRewrite> :
   defn do-next? () -> [Int, EIns] :
     let loop () :
+      fail() when empty?(inz)
       val [off,i] = next(inz)
       match(i:ELive) : loop()
       else: [off,i]

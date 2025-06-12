@@ -10,6 +10,9 @@ defpackage stz/cvm-code-table :
   import stz/ptr-buffer
   import stz/branch-dag
   import stz/trie-table
+  import stz/vm-ids
+
+extern printf: (ptr<byte>, ? ...) -> int
 
 ;============================================================
 ;=================== Struct Definition ======================
@@ -34,12 +37,18 @@ lostanza defmethod instructions (t:ref<CVMCodeTable>) -> ref<Long> :
 ;==================== Loading Functions =====================
 ;============================================================
 
+defn maybe-print-rec (rec:CodeRec|False) :
+  println(rec) when rec is-not False
+
 lostanza defmethod load-function (table:ref<CVMCodeTable>,
                                   fid:ref<Int>,
                                   func:ref<VMFunction>,
+                                  rec:ref<CodeRec|False>,
                                   externfn?:ref<True|False>,
                                   resolver:ref<EncodingResolver>,
                                   backend:ref<Backend>) -> ref<LoadedFunction> :
+  ; call-c printf("--- LOAD-FUNCTION %d\n", fid.value)
+  ; maybe-print-rec(rec)
   ;Encode the function using the CVM encoder.
   val encoded-function = encode(func, resolver, backend)
 
@@ -83,6 +92,7 @@ lostanza defmethod dag-table (t:ref<CVMCodeTable>) -> ref<Long> :
 extern vmloop: (ptr<VMState>, long, long) -> int
 
 lostanza defmethod launch (vmstate-address:ref<Long>, table:ref<CVMCodeTable>, func-id:ref<Int>) -> ref<False> :
+  call-c printf("CVM LAUNCH\n")
   val vmstate = vmstate-address.value as ptr<VMState>
   call-c vmloop(vmstate, call-prim crsp() as long, func-id.value)
   return false

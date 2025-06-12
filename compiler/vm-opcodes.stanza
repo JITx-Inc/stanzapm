@@ -302,7 +302,7 @@ public defn set-reg-opcode (y:VMImm) -> Int :
         (v:Long) : SET-REG-OPCODE-WIDE  ;OR SIGNED
         (v:Float) : SET-REG-OPCODE-UNSIGNED
         (v:Double) : SET-REG-OPCODE-WIDE
-    (y:Marker) : SET-REG-OPCODE-UNSIGNED
+    (y:Marker) : SET-REG-OPCODE-WIDE
     (y:Tag) : SET-REG-OPCODE-UNSIGNED
     (y:CodeId) : SET-REG-OPCODE-CODE
     (y:ExternId) : SET-REG-OPCODE-WIDE
@@ -323,7 +323,7 @@ public defn set-opcode (y:VMImm) -> Int :
         (v:Long) : SET-OPCODE-WIDE  ;OR SIGNED
         (v:Float) : SET-OPCODE-UNSIGNED
         (v:Double) : SET-OPCODE-WIDE
-    (y:Marker) : SET-OPCODE-UNSIGNED
+    (y:Marker) : SET-OPCODE-WIDE
     (y:Tag) : SET-OPCODE-UNSIGNED
     (y:CodeId) : SET-OPCODE-CODE
     (y:ExternId) : SET-OPCODE-WIDE
@@ -331,7 +331,7 @@ public defn set-opcode (y:VMImm) -> Int :
     (y:GlobalId) : SET-OPCODE-GLOBAL
     (y:DataId) : SET-OPCODE-DATA
     (y:ConstId) : SET-OPCODE-CONST
-    (y:VoidMarker) : SET-OPCODE-SIGNED
+    (y:VoidMarker) : SET-OPCODE-WIDE
 
 public defn call-opcode (f:VMImm) -> Int :
   match(f) :

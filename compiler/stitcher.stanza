@@ -567,7 +567,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
               else if x == id-indices[CORE-FLOAT-ID] : INT(FLOAT-TAG-BITS)
               else if x == id-indices[CORE-DOUBLE-ID] : INT(DOUBLE-TAG-BITS-MIN)
               else : fatal("Not a primitive type")
-            val op = UgtOp() when (x == id-indices[CORE-DOUBLE-ID]) else EqOp()
+            val op = UgeOp() when (x == id-indices[CORE-DOUBLE-ID]) else EqOp()
             E $ BreakI(target, op, BITS, tagbits)
 
           ;Skip the branches if the object is not of that type

@@ -519,27 +519,27 @@ void init_opcode_names () {
 
 #define DECODE_A_UNSIGNED() \
   int32_t value = W1 >> 8; \
-  /*if(iprint) printf("          %ld) [%d | %d]\n", icounter, opcode, value);*/
+  // if(iprint) printf("          %ld) [%d | %d]\n", icounter, opcode, value);
 
 #define DECODE_A_SIGNED() \
   int32_t value = (int32_t)W1 >> 8; \
-  /*if(iprint) printf("          %ld) [%d | %d]\n", icounter, opcode, value);*/
+  // if(iprint) printf("          %ld) [%d | %d]\n", icounter, opcode, value);
 
 #define DECODE_B_UNSIGNED() \
   int32_t x = (W1 >> 8) & 0x3FF; \
   int32_t value = W1 >> 18; \
-  /*if(iprint) printf("          %ld) [%d | %d | %d]\n", icounter, opcode, x, value);*/
+  // if(iprint) printf("          %ld) [%d | %d | %d]\n", icounter, opcode, x, value);
 
 #define DECODE_C() \
   int32_t x = (W1 >> 8) & 0x3FF; \
   int32_t y = (W1 >> 22) & 0x3FF; \
   uint32_t value = PC_INT(); \
-  /*if(iprint) printf("          %ld) [%d | %d | %d | %d]\n", icounter, opcode, x, y, value);*/
+  // if(iprint) printf("          %ld) [%d | %d | %d | %d]\n", icounter, opcode, x, y, value);
 
 #define DECODE_D() \
   uint32_t x = (W1 >> 22) & 0x3FF; \
   uint64_t value = PC_LONG(); \
-  /*if(iprint) printf("          %ld) [%d | _ | %d | %ld]\n", icounter, opcode, x, value);*/
+  // if(iprint) printf("          %ld) [%d | _ | %d | %lld]\n", icounter, opcode, x, value);
 
 #define DECODE_E() \
   uint32_t W2 = PC_INT(); \
@@ -548,7 +548,7 @@ void init_opcode_names () {
   int32_t y = (int32_t)(W12 >> 18) & 0x3FF; \
   int32_t z = (int32_t)(W12 >> 28) & 0x3FF; \
   int32_t value = (int32_t)((int64_t)W12 >> 38); \
-  /*if(iprint) printf("          %ld) [%d | %d | %d | %d | %d]\n", icounter, opcode, x, y, z, value);*/
+  // if(iprint) printf("          %ld) [%d | %d | %d | %d | %d]\n", icounter, opcode, x, y, z, value);
 
 #define DECODE_F() \
   uint32_t W2 = PC_INT(); \
@@ -558,7 +558,7 @@ void init_opcode_names () {
   int32_t _n1 = (int32_t)(W12 >> 14); /*Move first bit to 32-bit boundary*/ \
   int32_t n1 = (int32_t)(_n1 >> 14); /*Extend sign-bit*/ \
   int32_t n2 = (int32_t)((int32_t)W2 >> 14); /*Extend sign-bit of first word*/ \
-  /*if(iprint) printf("          %ld) [%d | %d | %d | %d | %d]\n", icounter, opcode, x, y, n1, n2);*/
+  // if(iprint) printf("          %ld) [%d | %d | %d | %d | %d]\n", icounter, opcode, x, y, n1, n2);
 
 #define F_JUMP(condition) \
   if(condition){ \
@@ -577,8 +577,10 @@ void init_opcode_names () {
     /*printf("            tgt: %d\n", tgt);*/ \
   }
 
+  // printf("SET-REG %d = %llx\n", r, ((uint64_t)(v))); 
 #define SET_REG(r,v) \
   registers[r] = v
+  // printf("SET-LOCAL %d = %llx\n", l, ((uint64_t)(v))); 
 #define SET_LOCAL(l,v) \
   stack_pointer->slots[l] = v;
 #define SET_LOCAL_FLOAT(l,v) \
@@ -626,12 +628,18 @@ const uint64_t CHAR_TAG_BIT = 3L;
 const uint64_t FLOAT_TAG_BIT = 4L;
 const uint64_t DOUBLE_TAG_BIT = 5L;
 const uint64_t REF_TAG_BITS = 0L;
-const uint64_t INT_TAG_BITS = 1L << INT_TAG_BIT;
-const uint64_t MARKER_TAG_BITS = 1L << MARKER_TAG_BIT;
-const uint64_t BYTE_TAG_BITS = 1L << BYTE_TAG_BIT;
-const uint64_t CHAR_TAG_BITS = 1L << CHAR_TAG_BIT;
-const uint64_t FLOAT_TAG_BITS = 1L << FLOAT_TAG_BIT;
-const uint64_t DOUBLE_TAG_BITS_MIN = 1L << DOUBLE_TAG_BIT;
+const uint64_t INT_TAG_BITS = 1L << (INT_TAG_BIT);
+const uint64_t MARKER_TAG_BITS = 1L << (MARKER_TAG_BIT);
+const uint64_t BYTE_TAG_BITS = 1L << (BYTE_TAG_BIT);
+const uint64_t CHAR_TAG_BITS = 1L << (CHAR_TAG_BIT);
+const uint64_t FLOAT_TAG_BITS = 1L << (FLOAT_TAG_BIT);
+const uint64_t DOUBLE_TAG_BITS_MIN = 1L << (DOUBLE_TAG_BIT);
+const uint64_t INT_TAG_BITS_L = INT_TAG_BITS << BASE_TAG_BIT;
+const uint64_t MARKER_TAG_BITS_L = MARKER_TAG_BITS << BASE_TAG_BIT;
+const uint64_t BYTE_TAG_BITS_L = BYTE_TAG_BITS << BASE_TAG_BIT;
+const uint64_t CHAR_TAG_BITS_L = CHAR_TAG_BITS << BASE_TAG_BIT;
+const uint64_t FLOAT_TAG_BITS_L = FLOAT_TAG_BITS << BASE_TAG_BIT;
+const uint64_t DOUBLE_TAG_BITS_MIN_L = DOUBLE_TAG_BITS_MIN << BASE_TAG_BIT;
 
 #define FALSE_TYPE 0
 #define TRUE_TYPE 1
@@ -650,7 +658,7 @@ const uint64_t DOUBLE_TAG_BITS_MIN = 1L << DOUBLE_TAG_BIT;
 #define INIT_CONSTS_FN 2
 #define EXECUTE_TOPLEVEL_COMMAND_FN 3
 
-#define BOOLREF(x) ((x) + MARKER_TAG_BITS)
+#define BOOLREF(x) ((x) + MARKER_TAG_BITS_L)
 
 #define SYSTEM_RETURN_STUB -2
 
@@ -705,6 +713,12 @@ typedef struct{
   void* safepoint_table;
   void* debug_table;
   void* local_var_table;
+  void* heap_statistics;
+  void* heap_dominator_tree;
+  void* profile_flag;
+  void* profile_buffer;
+  void* function_counters;
+  void* function_info;
   uint64_t* class_table;       //(Permanent State)
   //Interpreted Mode Tables
   char* instructions;          //(Permanent State)
@@ -832,7 +846,7 @@ uint64_t ptr_to_ref (void* p){
 //long iprint_start;
 //long iprint_end;
 //long iprint_step;
-//long icounter;
+//long icounter = 0;
 //int iprint_init = 0;
 //void init_iprint () {
 //  if(!iprint_init){
@@ -877,6 +891,10 @@ void vmloop (VMState* vms, uint64_t stanza_crsp, int64_t starting_fid){
   //Debug
   //init_iprint();
 
+  init_opcode_names();
+
+  // const int iprint = 0;
+
   //Repl Loop
   while(1){
     //icounter++;
@@ -893,6 +911,8 @@ void vmloop (VMState* vms, uint64_t stanza_crsp, int64_t starting_fid){
     //  timings[last_opcode] += curtime - last_time;
     //last_opcode = opcode;
     //last_time = curtime;
+
+    // printf("%lld: OPCODE %d %s\n", (pc - instructions), opcode, opcode_names[opcode]);
 
     switch(opcode){
     case SET_OPCODE_LOCAL : {
@@ -1715,7 +1735,7 @@ void vmloop (VMState* vms, uint64_t stanza_crsp, int64_t starting_fid){
       DECODE_F();
       int tagbits = (int)(LOCAL(x) >> BASE_TAG_BIT);
       int bits = y;
-      F_JUMP(tagbits > DOUBLE_TAG_BITS_MIN);
+      F_JUMP(tagbits >= DOUBLE_TAG_BITS_MIN);
     }
     case JUMP_TAGWORD_OPCODE : {
       DECODE_F();
@@ -1832,22 +1852,22 @@ void vmloop (VMState* vms, uint64_t stanza_crsp, int64_t starting_fid){
     }
     case TAG_OPCODE_BYTE : {
       DECODE_B_UNSIGNED();
-      SET_LOCAL(x, ((uint64_t)(uint8_t)(LOCAL(value))) + BYTE_TAG_BITS);
+      SET_LOCAL(x, ((uint64_t)(uint8_t)(LOCAL(value))) + BYTE_TAG_BITS_L);
       continue;
     }
     case TAG_OPCODE_CHAR : {
       DECODE_B_UNSIGNED();
-      SET_LOCAL(x, ((uint64_t)(uint8_t)(LOCAL(value))) + CHAR_TAG_BITS);
+      SET_LOCAL(x, ((uint64_t)(uint8_t)(LOCAL(value))) + CHAR_TAG_BITS_L);
       continue;
     }
     case TAG_OPCODE_INT : {
       DECODE_B_UNSIGNED();
-      SET_LOCAL(x, ((uint64_t)LOCAL(value)) + INT_TAG_BITS);
+      SET_LOCAL(x, ((uint64_t)(uint32_t)LOCAL(value)) + INT_TAG_BITS_L);
       continue;
     }
     case TAG_OPCODE_FLOAT : {
       DECODE_B_UNSIGNED();
-      SET_LOCAL(x, ((uint64_t)LOCAL(value)) + FLOAT_TAG_BITS);
+      SET_LOCAL(x, ((uint64_t)LOCAL(value)) + FLOAT_TAG_BITS_L);
       continue;
     }
     case TAG_OPCODE_DOUBLE : {
@@ -2357,7 +2377,8 @@ typedef struct {
   int value;
 } DKV;
 
-int PRIM_TYPEIDS[] = {INT_TYPE, 0, 0, BYTE_TYPE, CHAR_TYPE, FLOAT_TYPE};
+//                    0  1         2  3  4          5, 6, 7, 8,         9, 0, 1, 2, 3, 4, 5, 16
+int PRIM_TYPEIDS[] = {0, INT_TYPE, 0, 0, BYTE_TYPE, 0, 0, 0, CHAR_TYPE, 0, 0, 0, 0, 0, 0, 0, FLOAT_TYPE};
 
 int argtype (VMState* vms, int i){
   uint64_t x = vms->registers[i];
@@ -2369,7 +2390,7 @@ int argtype (VMState* vms, int i){
   else if(tagbits == MARKER_TAG_BITS){
     return (int)(x);
   }
-  else if(tagbits > DOUBLE_TAG_BITS_MIN){
+  else if(tagbits >= DOUBLE_TAG_BITS_MIN){
     return DOUBLE_TYPE;
   }
   else{

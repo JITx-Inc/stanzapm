@@ -20,6 +20,7 @@ defpackage stz/vm-table :
   import stz/const-pool
   import stz/trace-info
   import stz/branch-dag
+  import stz/vm-ids
 
 ;============================================================
 ;================ Definition of all Tables ==================
@@ -377,11 +378,12 @@ lostanza defn non-negative? (xs:ref<Array<Int>>, i:ref<Int>) -> long :
 
 public lostanza defn load-function (vmt:ref<VMTable>,
                                     func:ref<VMDefn>,
+                                    rec:ref<CodeRec|False>,
                                     externfn?:ref<True|False>,
                                     resolver:ref<EncodingResolver>,
                                     backend:ref<Backend>) -> ref<False> :
   ;Encode the function and load it into the code table.
-  val load-result = load-function(vmt.code-table, id(func), /func(func), externfn?, resolver, backend)
+  val load-result = load-function(vmt.code-table, id(func), /func(func), rec, externfn?, resolver, backend)
 
   ;Store the function address into the function-addresses table.
   val id = id(func)

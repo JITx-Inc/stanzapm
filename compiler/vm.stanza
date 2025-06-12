@@ -29,6 +29,8 @@ defpackage stz/vm :
   import core/stack-trace
   import stz/branch-format
 
+extern printf: (ptr<byte>, ? ...) -> int
+
 ;<doc>=======================================================
 ;================= Virtual Machine Interface ================
 ;============================================================
@@ -268,7 +270,7 @@ public lostanza val VM-BYTE-TAG-BITS:int = 1 << VM-BYTE-TAG-BIT
 public lostanza val VM-CHAR-TAG-BITS:int = 1 << VM-CHAR-TAG-BIT
 public lostanza val VM-FLOAT-TAG-BITS:int = 1 << VM-FLOAT-TAG-BIT
 public lostanza val VM-DOUBLE-TAG-BITS-MIN:int = 1 << VM-DOUBLE-TAG-BIT
-public lostanza val VM-MARKER-TAG-BITS-SHIFTED:long = VM-MARKER-TAG-BITS << VM-BASE-TAG-BIT
+public lostanza val VM-MARKER-TAG-BITS-SHIFTED:long = (VM-MARKER-TAG-BITS as long) << (VM-BASE-TAG-BIT as long)
 
 public lostanza val BASE-TAG-BIT-INT:ref<Int> = new Int{VM-BASE-TAG-BIT}
 public lostanza val INT-TAG-BIT-INT:ref<Int> = new Int{VM-INT-TAG-BIT}
@@ -417,6 +419,7 @@ public lostanza defn VirtualMachine (dylibs:ref<LoadedDynamicLibraries>, backend
 ;Make an appropriate CodeTable depending on whether the user has
 ;enabled the JIT.
 defn make-code-table (resolver:EncodingResolver, backend:Backend) -> CodeTable :
+  println("EXPERIMENTAL-FEATURES %_" % [EXPERIMENTAL-FEATURES])
   if contains?(EXPERIMENTAL-FEATURES, `jit) : JITCodeTable(resolver, backend)
   else : CVMCodeTable()
 
@@ -697,7 +700,7 @@ public lostanza defn compute-live (vm:ref<VirtualMachine>, exclude:ref<Seqable<S
   for (var tracker:ptr<LivenessTracker> = heap.liveness-trackers, tracker != null, tracker = tracker.tail) :
     val tracker-obj = tracker as ptr<?> - sizeof(long)
     set-mark(tracker-obj, heap)
-    val value-obj = (tracker.value - 1) as ptr<?>
+    val value-obj = tracker.value as ptr<?>
     set-mark(value-obj, heap)
 
   complete-marking(vms)
@@ -880,11 +883,11 @@ defn EncodingResolver (class-table:ClassTable,
         DOUBLE-TYPE : DOUBLE-TAG-INT-MIN
     defmethod tagbit (this, n:Int) :
       switch(n) :
-        BYTE-TYPE : BYTE-TAG-BIT-INT
-        CHAR-TYPE : CHAR-TAG-BIT-INT
-        INT-TYPE : INT-TAG-BIT-INT
-        FLOAT-TYPE : FLOAT-TAG-BIT-INT
-        DOUBLE-TYPE : DOUBLE-TAG-BIT-INT
+        BYTE-TYPE : BYTE-TAG-BIT-INT + BASE-TAG-BIT-INT
+        CHAR-TYPE : CHAR-TAG-BIT-INT + BASE-TAG-BIT-INT
+        INT-TYPE : INT-TAG-BIT-INT + BASE-TAG-BIT-INT
+        FLOAT-TYPE : FLOAT-TAG-BIT-INT + BASE-TAG-BIT-INT
+        DOUBLE-TYPE : DOUBLE-TAG-BIT-INT + BASE-TAG-BIT-INT
     defmethod extern-address (this, id:Int) :
       extern-address(dylibs, id)
     defmethod extern-defn-address (this, id:Int) :
@@ -938,7 +941,7 @@ public defn load (vm:VirtualMachine, vmps:Collection<VMPackage>, keep-existing-g
         val callback-set = load-unit.callbacks.seq(function-id).to-intset
         ;Load each of the functions.
         for f in funcs(load-unit) :
-          vmt.load-function(f, callback-set[id(f)], vm.encoding-resolver, vm.backend)
+          vmt.load-function(f, code-rec(vm-ids, id(f)), callback-set[id(f)], vm.encoding-resolver, vm.backend)
 
       ;Load datas and consts
       vprintln("VM: Loading datas and constants")

@@ -362,12 +362,65 @@ defstruct SetCArg :
 with:
   printer => true
 
+val tmp1                = rbx
+val all-saved-registers = [ rbx, rcx, rsi, rdi rdx, r8, r9, r10, r11, r12, r13, r14, r15 ]
+val c-args              = [rdi, rsi, rdx, rcx, r8, r9]
+
+defn save-registers (a:Assembler, regs:Seqable<Gp>) :
+  for reg in regs do : push(a, reg)
+
+defn restore-registers (a:Assembler, regs:Seqable<Gp>) :
+  for reg in reverse $ to-list $ regs do : pop(a, reg)
+
+defn all-save-registers (a:Assembler) : save-registers(a, all-saved-registers)
+defn all-restore-registers (a:Assembler) : restore-registers(a, all-saved-registers)
+
+extern malloc: (long) -> ptr<?>
+extern strcpy: (ptr<byte>, ptr<byte>) -> ptr<?>
+extern printf: (ptr<byte>, ? ...) -> int
+
+lostanza defn printf-format (s:ref<String>) -> ref<Long> :
+  val n = length(s)
+  val d = call-c malloc(n.value + 1)
+  call-c strcpy(d, addr!(s.chars))
+  return new Long{d as long}
+
+lostanza defn printf-addr () -> ref<Long> :
+  return new Long{addr!(printf) as long}
+
+val dump-save-registers = [r8, r9, r10, r11, r12]
+
+defn dump (a:Assembler, format:String, args:Tuple<Gp|Int|Long>) :
+  all-save-registers(a)
+  push(a, rax)
+  val regs = to-tuple $ for (arg in args, reg in c-args) seq :
+    match(arg) :
+      (arg:Gp) : arg
+      (arg:Int|Long) : mov(a, reg, arg)
+  mov(a, r8,  printf-format(format))
+  ;move into saved regs to do a reshuffle in case c-args are in args
+  for (save-reg in dump-save-registers[1 to false], reg in regs) do :
+    mov(a, save-reg, reg)
+  ;now can move to real c-args 
+  for (arg in c-args, save-reg in dump-save-registers) do :
+    mov(a, arg, save-reg)
+  ;clear xmm count register
+  mov(a, rax, 0L)
+  mov(a, tmp1, printf-addr())
+  call(a, tmp1)
+  pop(a, rax)
+  all-restore-registers(a)
+
 defn AsmGen (code:CodeHolder,
              a:Assembler,
              resolver:EncodingResolver,
              func-info:FuncInfo|False,
              trace-entry-table:Vector<TraceTableEntry>|False,
              backend:Backend) :
+
+  defn trace-opcode (opcode:Int, name:String) :
+    val format = string-join $ [ name "\n" ]
+    dump(a, format, []) 
 
   ;=========================================================
   ;================ Registers ==============================
@@ -829,7 +882,11 @@ defn AsmGen (code:CodeHolder,
 
   ;Emit instructions to add the given tagbits to the
   ;LoStanza value held in x.
+  defn detag (x:Gp) :
+    mov(a, gp32(x), gp32(x)) ; detag old tag
+
   defn add-tag (x:Gp, tag:Int) :
+    detag(x) ; TODO: why do i need this?
     bts(a, x, tag)
 
   ;Jump to function with id 'func-id + add-to-id'.
@@ -914,12 +971,14 @@ defn AsmGen (code:CodeHolder,
   ;Returns the stack-local in a register.
   ;Use the given temporary register if necessary.
   defn local (i:Int, tmp:Gp) -> Gp :
-    match(stack-local(i)) :
+    val r = match(stack-local(i)) :
       (r:Gp) :
         r
       (m:MemPtr) :
         mov(a, tmp, m)
         tmp
+    ; dump(a, "  LOC[%d] = %llx\n", [i, r])
+    r
 
   ;Retrieve the i'th cached local and interpret it as a floating point value.
   ;Uses int-temp as a temporary register that is used if the local is not
@@ -1188,6 +1247,7 @@ defn AsmGen (code:CodeHolder,
         get-vmstate-global-mem(reg(Tmp2))
         lea(a, reg(Tmp2), MemPtr(reg(Tmp2), reg(Tmp1), 0, 0))
         mov-to-x(reg(Tmp2), false)
+        ; dump(a, "*** GLOBAL[%d] = %p\n", [id(v), reg(Tmp2)])
       (v:DataId) :
         ;TMP1:int = data-offsets[v]
         get-vmstate-data-offsets(reg(Tmp2))
@@ -1434,6 +1494,8 @@ defn AsmGen (code:CodeHolder,
         a.mov(reg(BITS), object)
         a.shr(reg(BITS), to-int(BASE-TAG-BIT))
 
+        ; dump(a, "BITS = %lx\n", [reg(BITS)])
+
         ;Jump to the appropriate primitive target if the object
         ;is one of the given primitives.
         for entry in prim-targets:
@@ -1448,10 +1510,11 @@ defn AsmGen (code:CodeHolder,
 
         if marker-targets? :
           a.cmp(reg(BITS), to-int(MARKER-TAG-BITS))
-          a.jne(marker-branches)
+          a.je(marker-branches)
         if ref-targets? :
-          a.jmp(default-target)
-
+          a.cmp(reg(BITS), to-int(REF-TAG-BITS))
+          a.je(ref-branches)
+        a.jmp(default-target)
 
         ;Jump to the appropriate reference branches if the object
         ;is one of the given references
@@ -1482,10 +1545,11 @@ defn AsmGen (code:CodeHolder,
         ;Jump to the appropriate marker branches if the object is one
         ;of the given marker branches.
         if marker-targets? :
-          a.and-op(object, 0xffffffff) ; TODO: COULD REMOVE
+          a.bind(marker-branches)
+          detag(object)
+
           defn marker-tree () :
             BinaryNode $ marker-targets
-          a.bind(marker-branches)
           let loop (tree:BinaryNode<Label> = marker-tree()) :
             match(tree) :
               (tree:InnerNode<Label>) :
@@ -2042,7 +2106,7 @@ defn AsmGen (code:CodeHolder,
         set-local(x, reg(Tmp1), 8)
       DETAG-OPCODE :
         set-imm(reg(Tmp1), y)
-        movsxd(a, reg(Tmp1), reg(Tmp1))
+        detag(reg(Tmp1))
         set-local(x, reg(Tmp1), 8)
       DEREF-OPCODE :
         set-imm(reg(Tmp1), y)
@@ -2730,6 +2794,9 @@ defn AsmGen (code:CodeHolder,
   ;=============== Emit Instructions =======================
   ;=========================================================
   defn emit-ins (ins:VMIns) -> False :
+    ; println(ins)
+    ; dump(a, string-join $ [ins, "\n"], [])
+
     match(ins) :
       (ins:LabelIns) :
         bind(a, get-label(n(ins)))
@@ -3168,6 +3235,7 @@ lostanza defn address (func:ref<Func>) -> ref<Long> :
 ;============================================================
 
 public defn encode (func:VMFunction,
+                    rec:CodeRec|False,
                     externfn?:True|False,
                     stubs:JITStubs,
                     rt:JitRuntime,

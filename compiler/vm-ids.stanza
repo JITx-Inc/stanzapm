@@ -63,6 +63,7 @@ public defmulti function-dependencies (ids:VMIds, f:Int) -> Tuple<RecFromPackage
 public defmulti class-dependencies (ids:VMIds, c:Int) -> Tuple<RecFromPackage>
 public defmulti load-packages (ids:VMIds, pkgs:Collection<VMPackage>) -> LoadUnit
 public defmulti class-rec (ids:VMIds, global-id:Int) -> StructRec|TypeRec|False
+public defmulti code-rec (ids:VMIds, global-id:Int) -> CodeRec|False
 public defmulti package-init (ids:VMIds, package:Symbol) -> Int|False
 
 public defn VMIds (dylibs:LoadedDynamicLibraries,
@@ -315,6 +316,8 @@ public defn VMIds (dylibs:LoadedDynamicLibraries,
       package-inits[pkg]      
     defmethod class-rec (this, global-id:Int) :
       get?(class-recs, global-id, false) as StructRec|TypeRec|False
+    defmethod code-rec (this, global-id:Int) :
+      get?(code-recs, global-id, false) as CodeRec|False
     defmethod function-dependencies (this, f:Int) :
       get?(function-dependencies, f, [])
     defmethod class-dependencies (this, c:Int) :
@@ -322,7 +325,7 @@ public defn VMIds (dylibs:LoadedDynamicLibraries,
     defmethod load-packages (this, pkgs:Collection<VMPackage>) :
       load-packages(pkgs)
 
-deftype CodeRec :
+public deftype CodeRec :
   FnRec <: CodeRec
   MultiRec <: CodeRec
   ExternFnRec <: CodeRec

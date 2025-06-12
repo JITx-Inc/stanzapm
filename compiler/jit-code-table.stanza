@@ -11,6 +11,9 @@ defpackage stz/jit-code-table :
   import stz/vm-structures
   import stz/branch-dag
   import stz/ptr-buffer
+  import stz/vm-ids
+
+extern printf: (ptr<byte>, ? ...) -> int
 
 ;============================================================
 ;================= Struct Definition ========================
@@ -49,11 +52,18 @@ public defn JITCodeTable (resolver:EncodingResolver, backend:Backend) -> JITCode
 defmethod load-function (table:JITCodeTable,
                          fid:Int,
                          vmfunc:VMFunction,
+                         rec:CodeRec|False,
                          externfn?:True|False,
                          resolver:EncodingResolver,
                          backend:Backend) -> LoadedFunction :
   ;Encode the function using the JIT encoder.
-  val encoded-function = encode(vmfunc, externfn?, table.stubs, table.runtime, resolver, backend)
+  ; println("\n--- FID = %_" % [fid])
+  ; println(rec) when rec is-not False
+  ; match(vmfunc:VMFunc) :
+  ;   for arg in args(vmfunc) do :
+  ;     println("  %_" % [arg])
+  ; println("")
+  val encoded-function = encode(vmfunc, rec, externfn?, table.stubs, table.runtime, resolver, backend)
 
   ;If there is already a function at that location, then
   ;delete it.
