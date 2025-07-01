@@ -17,7 +17,8 @@ public defn etype-to-arg (ct:DynTree, t:EType, include-abstract?:True|False) -> 
         Nums $
           if include-abstract? : all-children(ct, n(t))
           else : all-leaves(ct, n(t))
-
+      (t:EBot) : Nums([])
+         
 public defn to-arg (t:TypeSet, set-representation:Int -> Tuple<Int>) -> Arg :
   let to-arg (t:TypeSet = t) :
     match(t) :
