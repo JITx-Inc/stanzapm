@@ -146,6 +146,8 @@ defn lower (epackage:EPackage, optimize?:True|False, profile?:True|False, covera
     run-pass("Lift Closures", lift-closures, "closurelifted", false)
     run-pass("Lift Type Objects", lift-type-objects, "typelifted", false)
 
+    ; dump(cur-package, "logs", "end")
+
     ;Return processed package
     cur-package
 

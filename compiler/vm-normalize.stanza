@@ -397,12 +397,30 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
         do-set-tag-bit(tmp, tag-bit)
       defn do-set-tag-bit (tmp:Local, tag-bit:Long) :
         emit(buffer, Op2Ins(x, SetBitOp(), NumConst(tag-bit + BASE-TAG-BIT), tmp))
+      ; defn tag-float-with-bits (tag-bit:Long) :
+      ;   val tmp-long1 = make-local(buffer, VMLong())
+      ;   val tmp-long2 = make-local(buffer, VMLong())
+      ;   val tmp-long3 = make-local(buffer, VMLong())
+      ;   ; val tmp-int = make-local(buffer, VMInt())
+      ;   norm-interpret-op(tmp-long1, y)
+      ;   emit(buffer, Op2Ins(tmp-long2, ShlOp(), tmp-long1, NumConst(32L)))
+      ;   emit(buffer, Op2Ins(tmp-long3, ShrOp(), tmp-long2, NumConst(32L)))
+      ;   ; norm-conv-op(tmp, tmp-int)
+      ;   do-set-tag-bit(tmp-long3, tag-bit)
       defn tag-float-with-bits (tag-bit:Long) :
         val tmp = make-local(buffer, VMLong())
         val tmp-int = make-local(buffer, VMInt())
         norm-interpret-op(tmp-int, y)
-        norm-conv-op(tmp, tmp-int)
+        ; norm-interpret-op(tmp, y)
+        emit(buffer, Op2Ins(tmp, AddOp(), tmp-int, NumConst(0)))
+        ; norm-conv-op(tmp, tmp-int)
         do-set-tag-bit(tmp, tag-bit)
+      ; defn tag-float-with-bits (tag-bit:Long) :
+      ;   val tmp = make-local(buffer, VMLong())
+      ;   val tmp-int = make-local(buffer, VMInt())
+      ;   norm-interpret-op(tmp-int, y)
+      ;   norm-conv-op(tmp, tmp-int)
+      ;   do-set-tag-bit(tmp, tag-bit)
       defn tag-double () :
         val tmp = make-local(buffer, VMLong())
         norm-interpret-op(tmp, y)
@@ -425,21 +443,26 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
         norm-conv-op(tmp-int, y)
         norm-conv-op(x, tmp-int)
   
-      defn detag-float () :
-        val tmp-long1 = make-local(buffer, VMLong())
-        val tmp-long2 = make-local(buffer, VMLong())
-        emit(buffer, Op2Ins(tmp-long1, ShlOp(), y, NumConst(32L)))
-        emit(buffer, Op2Ins(tmp-long2, ShrOp(), tmp-long1, NumConst(32L)))
-        ; norm-conv-op(tmp-long2, y)
-        ; norm-interpret-op(x, tmp-long2)
-        val tmp-int = make-local(buffer, VMInt())
-        norm-conv-op(tmp-int, tmp-long2)
-        norm-interpret-op(x, tmp-int)
+      ; defn detag-float () :
+      ;   val tmp-long1 = make-local(buffer, VMLong())
+      ;   val tmp-long2 = make-local(buffer, VMLong())
+      ;   emit(buffer, Op2Ins(tmp-long1, ShlOp(), y, NumConst(32L)))
+      ;   emit(buffer, Op2Ins(tmp-long2, ShrOp(), tmp-long1, NumConst(32L)))
+      ;   ; norm-conv-op(tmp-long2, y)
+      ;   ; norm-interpret-op(x, tmp-long2)
+      ;   val tmp-int = make-local(buffer, VMInt())
+      ;   norm-conv-op(tmp-int, tmp-long2)
+      ;   norm-interpret-op(x, tmp-int)
 
       ; defn detag-float () :
       ;   val tmp-int = make-local(buffer, VMInt())
       ;   norm-conv-op(tmp-int, y)
       ;   norm-interpret-op(x, tmp-int)
+
+      defn detag-float () :
+        val tmp-int = make-local(buffer, VMInt())
+        norm-conv-op(tmp-int, y)
+        norm-interpret-op(x, tmp-int)
 
       defn detag-double () :
         val tmp = make-local(buffer, VMLong())

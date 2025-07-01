@@ -255,7 +255,7 @@ public defn coalesce (f:CallFormat) :
 ;==================== Tag Bits ==============================
 ;============================================================
 
-public lostanza val VM-BASE-TAG-BIT:int = 46
+public lostanza val VM-BASE-TAG-BIT:int = 45
 public lostanza val VM-REF-TAG-BIT:int = 0
 public lostanza val VM-INT-TAG-BIT:int = 0
 public lostanza val VM-MARKER-TAG-BIT:int = 1
@@ -279,7 +279,7 @@ public lostanza val MARKER-TAG-BIT-INT:ref<Int> = new Int{VM-MARKER-TAG-BIT}
 public lostanza val BYTE-TAG-BIT-INT:ref<Int> = new Int{VM-BYTE-TAG-BIT}
 public lostanza val CHAR-TAG-BIT-INT:ref<Int> = new Int{VM-CHAR-TAG-BIT}
 public lostanza val FLOAT-TAG-BIT-INT:ref<Int> = new Int{VM-FLOAT-TAG-BIT}
-public lostanza val DOUBLE-TAG-BIT-INT:ref<Int> = new Int{VM-FLOAT-TAG-BIT}
+public lostanza val DOUBLE-TAG-BIT-INT:ref<Int> = new Int{VM-DOUBLE-TAG-BIT}
 
 public lostanza val INT-TAG-INT:ref<Int> = new Int{VM-INT-TAG-BITS}
 public lostanza val REF-TAG-INT:ref<Int> = new Int{VM-REF-TAG-BITS}

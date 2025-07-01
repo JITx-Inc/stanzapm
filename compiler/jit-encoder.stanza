@@ -1470,6 +1470,7 @@ defn AsmGen (code:CodeHolder,
             else if x == CHAR-TYPE : prim-targets.add(x => tgt)
             else if x == INT-TYPE : prim-targets.add(x => tgt)
             else if x == FLOAT-TYPE : prim-targets.add(x => tgt)
+            else if x == DOUBLE-TYPE : prim-targets.add(x => tgt)
             else if resolver.marker?(x) : marker-targets.add(x => tgt)
             else : ref-targets.add(x => tgt)              
 
@@ -2749,8 +2750,12 @@ defn AsmGen (code:CodeHolder,
     defn compare-tag-bits (typeid:Int) :
       ;Let Tmp1 = x >> BASE-TAG-BIT
       set-imm(reg(Tmp1), x)
+      ; if typeid == DOUBLE-TYPE :
+      ;   dump(a, "DOUBLE = %lx", [reg(Tmp1)])
       shr(a, reg(Tmp1), to-int(BASE-TAG-BIT))
       ;goto n1 when Tmp1 == tagbits(typeid) else goto n2
+      ; if typeid == DOUBLE-TYPE :
+      ;   dump(a, " IS %lx %lx\n", [reg(Tmp1), tagbits(resolver,typeid)])
       cmp(a, reg(Tmp1), tagbits(resolver,typeid))
       if typeid == DOUBLE-TYPE :
         jge(a, get-label(n1))
@@ -2785,8 +2790,11 @@ defn AsmGen (code:CodeHolder,
   ;=========================================================
   defn emit-instanceof (n1:Int, n2:Int, x:VMImm, type:TypeSet) :
     if type is SingleType and type-is-final?(resolver,type) :
+      ; if /type(type as SingleType) == DOUBLE-TYPE :
+      ;   dump(a, "FAST-INSTANCEOF\n", [])
       emit-fast-instanceof(n1, n2, x, type as SingleType)
     else :
+      ; dump(a, "SLOW-INSTANCEOF\n", [])
       val format = match-format(resolver, [[type]])
       emit-dispatch(format, [x], get-labels([n2, n1]))
 

@@ -2971,7 +2971,7 @@ val COROUTINE-OPEN = 3
 
 #else :
 
-  lostanza val BASE-TAG-BIT:long = 46L
+  lostanza val BASE-TAG-BIT:long = 45L
   lostanza val REF-TAG-BIT:long = 0L
   lostanza val INT-TAG-BIT:long = 0L
   lostanza val MARKER-TAG-BIT:long = 1L
