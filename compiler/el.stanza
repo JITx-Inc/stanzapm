@@ -141,6 +141,7 @@ defn lower (epackage:EPackage, optimize?:True|False, profile?:True|False, covera
       run-pass("Eliminate Dead Code", eliminate-dead-code, "dead-code3", false)
       ;Finish by removing checks
       run-pass("Force Remove Checks", force-remove-checks, "removed-checks", false)
+      run-pass("Eliminate Dead Code", eliminate-dead-code, "dead-code4", false)
     run-pass("Resolve Matches", resolve-matches, "resolved-matches", false)
     run-pass("Simplify Typeof", simplify-typeof, "simplify-typeof2", false)
     run-pass("Lift Closures", lift-closures, "closurelifted", false)

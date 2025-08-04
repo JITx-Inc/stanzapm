@@ -2043,10 +2043,12 @@ defn AsmGen (code:CodeHolder,
         set-local(x, reg(Tmp1), 8)
       CONV-OPCODE-FLOAT-BYTE :
         set-imm(reg(Tmp1), y)
+        movsx(a, reg(Tmp1), reg(Tmp1))
         cvtsi2ss(a, xmm0, reg(Tmp1))
         set-local-float(x, xmm0, 4)
       CONV-OPCODE-FLOAT-INT :
         set-imm(reg(Tmp1), y)
+        movsxd(a, reg(Tmp1), reg(Tmp1))
         cvtsi2ss(a, xmm0, reg(Tmp1))
         set-local-float(x, xmm0, 4)
       CONV-OPCODE-FLOAT-LONG :
@@ -2055,10 +2057,12 @@ defn AsmGen (code:CodeHolder,
         set-local-float(x, xmm0, 4)
       CONV-OPCODE-DOUBLE-BYTE :
         set-imm(reg(Tmp1), y)
+        movsx(a, reg(Tmp1), reg(Tmp1))
         cvtsi2sd(a, xmm0, reg(Tmp1))
         set-local-float(x, xmm0, 8)
       CONV-OPCODE-DOUBLE-INT :
         set-imm(reg(Tmp1), y)
+        movsxd(a, reg(Tmp1), reg(Tmp1))
         cvtsi2sd(a, xmm0, reg(Tmp1))
         set-local-float(x, xmm0, 8)
       CONV-OPCODE-DOUBLE-LONG :
