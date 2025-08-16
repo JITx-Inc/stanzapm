@@ -132,9 +132,6 @@ public defmulti marker? (r:EncodingResolver, n:Int) -> True|False
 ;Return the tagbits used for the given primitive types: Byte, Char, Int, Float.
 public defmulti tagbits (r:EncodingResolver, typeid:Int) -> Int
 
-;Return the tagbit used for the given primitive types: Byte, Char, Int, Float.
-public defmulti tagbit (r:EncodingResolver, typeid:Int) -> Int
-
 ;Return the address of the given extern address.
 public defmulti extern-address (r:EncodingResolver, id:Int) -> Long  
 

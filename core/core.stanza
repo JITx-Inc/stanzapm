@@ -2964,6 +2964,7 @@ val COROUTINE-OPEN = 3
 
   lostanza val INT-TAG-BITS:long = 0L
   lostanza val REF-TAG-BITS:long = 1L
+  lostanza val MAX-REF-TAG-BITS:long = 1L
   lostanza val MARKER-TAG-BITS:long = 2L
   lostanza val BYTE-TAG-BITS:long = 3L
   lostanza val CHAR-TAG-BITS:long = 4L
@@ -2971,21 +2972,14 @@ val COROUTINE-OPEN = 3
 
 #else :
 
-  lostanza val BASE-TAG-BIT:long = 45L
-  lostanza val REF-TAG-BIT:long = 0L
-  lostanza val INT-TAG-BIT:long = 0L
-  lostanza val MARKER-TAG-BIT:long = 1L
-  lostanza val BYTE-TAG-BIT:long = 2L
-  lostanza val CHAR-TAG-BIT:long = 3L
-  lostanza val FLOAT-TAG-BIT:long = 4L
-  lostanza val DOUBLE-TAG-BIT:long = 5L
-  lostanza val REF-TAG-BITS:long = 0L
-  lostanza val INT-TAG-BITS:long = 1L << INT-TAG-BIT
-  lostanza val MARKER-TAG-BITS:long = 1L << MARKER-TAG-BIT
-  lostanza val BYTE-TAG-BITS:long = 1L << BYTE-TAG-BIT
-  lostanza val CHAR-TAG-BITS:long = 1L << CHAR-TAG-BIT
-  lostanza val FLOAT-TAG-BITS:long = 1L << FLOAT-TAG-BIT
-  lostanza val DOUBLE-TAG-BITS-MIN:long = 1L << DOUBLE-TAG-BIT
+  lostanza val BASE-TAG-BIT:long        = 46L ;09876
+  lostanza val MAX-REF-TAG-BITS:long    =  3L ; 00xx
+  lostanza val INT-TAG-BITS:long        =  4L ; 0100
+  lostanza val MARKER-TAG-BITS:long     = 12L ; 1100
+  lostanza val BYTE-TAG-BITS:long       = 10L ; 1010
+  lostanza val CHAR-TAG-BITS:long       =  8L ; 1000
+  lostanza val FLOAT-TAG-BITS:long      =  9L ; 1001
+  lostanza val MIN-DOUBLE-TAG-BITS:long = 16L ;10000
 
 lostanza val FALSE-TYPE:int = 0
 lostanza val TRUE-TYPE:int = 1
@@ -4330,15 +4324,15 @@ public lostanza defn set-max-heap-size (sz:ref<Long>) -> ref<False> :
 lostanza defn object-type-id (x:ref<?>) -> int :
   val ref = x as long
   val tagbits = tagbits(ref)
-  if tagbits == INT-TAG-BITS : return INT-TYPE
+  if tagbits <= MAX-REF-TAG-BITS :
+    val p = untag-ref-ptr(ref)
+    return [p] as int
+  else if tagbits == INT-TAG-BITS : return INT-TYPE
   else if tagbits == BYTE-TAG-BITS : return BYTE-TYPE
   else if tagbits == CHAR-TAG-BITS : return CHAR-TYPE
   else if tagbits == FLOAT-TAG-BITS : return FLOAT-TYPE
   else if tagbits == MARKER-TAG-BITS :
     return untag-ref-marker(ref) as int
-  else if tagbits == REF-TAG-BITS :
-    val p = untag-ref-ptr(ref)
-    return [p] as int
   else :
     #if-defined(BOOTSTRAP) :
       call-c clib/printf("Illegal tag bits %llx\n", tagbits)

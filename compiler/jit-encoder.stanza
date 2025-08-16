@@ -390,13 +390,13 @@ lostanza defn printf-addr () -> ref<Long> :
 
 val dump-save-registers = [r8, r9, r10, r11, r12]
 
-defn dump (a:Assembler, format:String, args:Tuple<Gp|Int|Long>) :
+defn dump (a:Assembler, format:String, args:Tuple<Gp|Int|Long|MemPtr>) :
   all-save-registers(a)
   push(a, rax)
   val regs = to-tuple $ for (arg in args, reg in c-args) seq :
     match(arg) :
       (arg:Gp) : arg
-      (arg:Int|Long) : mov(a, reg, arg)
+      (arg:Int|Long|MemPtr) : mov(a, reg, arg)
   mov(a, r8,  printf-format(format))
   ;move into saved regs to do a reshuffle in case c-args are in args
   for (save-reg in dump-save-registers[1 to false], reg in regs) do :
@@ -887,7 +887,9 @@ defn AsmGen (code:CodeHolder,
 
   defn add-tag (x:Gp, tag:Int) :
     detag(x) ; TODO: why do i need this?
-    bts(a, x, tag)
+    for off in 0 to NUM-TAG-BITS do :
+      if ((to-int(tag) >> off) & 1) == 1 :
+        bts(a, x, off + to-int(BASE-TAG-BIT))
 
   ;Jump to function with id 'func-id + add-to-id'.
   ;- add-to-id: Meant to be used by method dispatch.
@@ -1143,7 +1145,7 @@ defn AsmGen (code:CodeHolder,
   ;  x = x to ref<True|False>
   ;Where x is either 1 or 0.
   defn bit-to-boolref (x:Gp) -> False :
-    bts(a, x, to-int(BASE-TAG-BIT + MARKER-TAG-BIT))
+    add-tag(x, to-int(MARKER-TAG-BITS))
     false
 
   ;Emit instructions for:
@@ -1513,8 +1515,9 @@ defn AsmGen (code:CodeHolder,
           a.cmp(reg(BITS), to-int(MARKER-TAG-BITS))
           a.je(marker-branches)
         if ref-targets? :
-          a.cmp(reg(BITS), to-int(REF-TAG-BITS))
-          a.je(ref-branches)
+          a.cmp(reg(BITS), to-int(MAX-REF-TAG-BITS))
+          a.jle(ref-branches)
+
         a.jmp(default-target)
 
         ;Jump to the appropriate reference branches if the object
@@ -2087,19 +2090,19 @@ defn AsmGen (code:CodeHolder,
         set-local-float(x, xmm0, 8)
       TAG-OPCODE-BYTE :
         set-imm(reg(Tmp1), y)
-        add-tag(reg(Tmp1), tagbit(resolver,BYTE-TYPE))
+        add-tag(reg(Tmp1), tagbits(resolver,BYTE-TYPE))
         set-local(x, reg(Tmp1), 8)
       TAG-OPCODE-CHAR :
         set-imm(reg(Tmp1), y)
-        add-tag(reg(Tmp1), tagbit(resolver,CHAR-TYPE))
+        add-tag(reg(Tmp1), tagbits(resolver,CHAR-TYPE))
         set-local(x, reg(Tmp1), 8)
       TAG-OPCODE-INT :
         set-imm(reg(Tmp1), y)
-        add-tag(reg(Tmp1), tagbit(resolver,INT-TYPE))
+        add-tag(reg(Tmp1), tagbits(resolver,INT-TYPE))
         set-local(x, reg(Tmp1), 8)
       TAG-OPCODE-FLOAT :
         set-imm(reg(Tmp1), y)
-        add-tag(reg(Tmp1), tagbit(resolver,FLOAT-TYPE))
+        add-tag(reg(Tmp1), tagbits(resolver,FLOAT-TYPE))
         set-local(x, reg(Tmp1), 8)
       TAG-OPCODE-DOUBLE :
         set-imm(reg(Tmp1), y)
@@ -2795,7 +2798,7 @@ defn AsmGen (code:CodeHolder,
   defn emit-instanceof (n1:Int, n2:Int, x:VMImm, type:TypeSet) :
     if type is SingleType and type-is-final?(resolver,type) :
       ; if /type(type as SingleType) == DOUBLE-TYPE :
-      ;   dump(a, "FAST-INSTANCEOF\n", [])
+      ; dump(a, "FAST-INSTANCEOF\n", [])
       emit-fast-instanceof(n1, n2, x, type as SingleType)
     else :
       ; dump(a, "SLOW-INSTANCEOF\n", [])

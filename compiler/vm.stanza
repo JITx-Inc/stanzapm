@@ -255,34 +255,18 @@ public defn coalesce (f:CallFormat) :
 ;==================== Tag Bits ==============================
 ;============================================================
 
-public lostanza val VM-BASE-TAG-BIT:int = 45
-public lostanza val VM-REF-TAG-BIT:int = 0
-public lostanza val VM-INT-TAG-BIT:int = 0
-public lostanza val VM-MARKER-TAG-BIT:int = 1
-public lostanza val VM-BYTE-TAG-BIT:int = 2
-public lostanza val VM-CHAR-TAG-BIT:int = 3
-public lostanza val VM-FLOAT-TAG-BIT:int = 4
-public lostanza val VM-DOUBLE-TAG-BIT:int = 5
-public lostanza val VM-REF-TAG-BITS:int = 0
-public lostanza val VM-INT-TAG-BITS:int = 1 << VM-INT-TAG-BIT
-public lostanza val VM-MARKER-TAG-BITS:int = 1 << VM-MARKER-TAG-BIT
-public lostanza val VM-BYTE-TAG-BITS:int = 1 << VM-BYTE-TAG-BIT
-public lostanza val VM-CHAR-TAG-BITS:int = 1 << VM-CHAR-TAG-BIT
-public lostanza val VM-FLOAT-TAG-BITS:int = 1 << VM-FLOAT-TAG-BIT
-public lostanza val VM-DOUBLE-TAG-BITS-MIN:int = 1 << VM-DOUBLE-TAG-BIT
+public lostanza val VM-BASE-TAG-BIT:int = 46
+public lostanza val VM-REF-TAG-BITS-MAX:int    =  3 ; 00xx
+public lostanza val VM-INT-TAG-BITS:int        =  4 ; 0100
+public lostanza val VM-MARKER-TAG-BITS:int     = 12 ; 1100
+public lostanza val VM-BYTE-TAG-BITS:int       = 10 ; 1010
+public lostanza val VM-CHAR-TAG-BITS:int       =  8 ; 1000
+public lostanza val VM-FLOAT-TAG-BITS:int      =  9 ; 1001
+public lostanza val VM-DOUBLE-TAG-BITS-MIN:int = 16 ;10000
 public lostanza val VM-MARKER-TAG-BITS-SHIFTED:long = (VM-MARKER-TAG-BITS as long) << (VM-BASE-TAG-BIT as long)
 
-public lostanza val BASE-TAG-BIT-INT:ref<Int> = new Int{VM-BASE-TAG-BIT}
-public lostanza val INT-TAG-BIT-INT:ref<Int> = new Int{VM-INT-TAG-BIT}
-public lostanza val REF-TAG-BIT-INT:ref<Int> = new Int{VM-REF-TAG-BIT}
-public lostanza val MARKER-TAG-BIT-INT:ref<Int> = new Int{VM-MARKER-TAG-BIT}
-public lostanza val BYTE-TAG-BIT-INT:ref<Int> = new Int{VM-BYTE-TAG-BIT}
-public lostanza val CHAR-TAG-BIT-INT:ref<Int> = new Int{VM-CHAR-TAG-BIT}
-public lostanza val FLOAT-TAG-BIT-INT:ref<Int> = new Int{VM-FLOAT-TAG-BIT}
-public lostanza val DOUBLE-TAG-BIT-INT:ref<Int> = new Int{VM-DOUBLE-TAG-BIT}
-
 public lostanza val INT-TAG-INT:ref<Int> = new Int{VM-INT-TAG-BITS}
-public lostanza val REF-TAG-INT:ref<Int> = new Int{VM-REF-TAG-BITS}
+public lostanza val REF-TAG-INT-MAX:ref<Int> = new Int{VM-REF-TAG-BITS-MAX}
 public lostanza val MARKER-TAG-INT:ref<Int> = new Int{VM-MARKER-TAG-BITS}
 public lostanza val BYTE-TAG-INT:ref<Int> = new Int{VM-BYTE-TAG-BITS}
 public lostanza val CHAR-TAG-INT:ref<Int> = new Int{VM-CHAR-TAG-BITS}
@@ -813,7 +797,7 @@ lostanza defn dump-stack (stackref:long, vm:ref<VirtualMachine>) -> int :
 lostanza defn print-tag (ref:long) -> int :
   call-c clib/printf("inspect tag of %p\n", ref)
   val tagbits = ref >> VM-BASE-TAG-BIT
-  if tagbits == VM-REF-TAG-BITS :
+  if tagbits <= VM-REF-TAG-BITS-MAX :
     val tag = [ref as ptr<long>]
     if tag == FN-TYPE.value or tag == TYPE-TYPE.value :
       val f:ptr<Function> = untag(ref)
@@ -864,7 +848,7 @@ defn EncodingResolver (class-table:ClassTable,
       add(branch-table, MultiFormat(multi, num-header-args, num-args))
     defmethod marker (this, type:Int) : marker-long(type)
     defmethod void-marker (this) : void-marker-long()
-    defmethod ref-offset (this) : REF-TAG-INT
+    defmethod ref-offset (this) : 0
     defmethod type-is-final? (this, n:Int) :
       val c = loaded-class(class-table, n)
       match(class(c)) :
@@ -881,13 +865,6 @@ defn EncodingResolver (class-table:ClassTable,
         INT-TYPE : INT-TAG-INT
         FLOAT-TYPE : FLOAT-TAG-INT
         DOUBLE-TYPE : DOUBLE-TAG-INT-MIN
-    defmethod tagbit (this, n:Int) :
-      switch(n) :
-        BYTE-TYPE : BYTE-TAG-BIT-INT + BASE-TAG-BIT-INT
-        CHAR-TYPE : CHAR-TAG-BIT-INT + BASE-TAG-BIT-INT
-        INT-TYPE : INT-TAG-BIT-INT + BASE-TAG-BIT-INT
-        FLOAT-TYPE : FLOAT-TAG-BIT-INT + BASE-TAG-BIT-INT
-        DOUBLE-TYPE : DOUBLE-TAG-BIT-INT + BASE-TAG-BIT-INT
     defmethod extern-address (this, id:Int) :
       extern-address(dylibs, id)
     defmethod extern-defn-address (this, id:Int) :

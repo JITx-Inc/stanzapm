@@ -36,24 +36,18 @@ public val EXECUTE-TOPLEVEL-COMMAND-FN = 3
 public val PROFILE-STACK-TRACE-FN = 4
 public val NUM-BUILTIN-FNS = 5
 
-public val BASE-TAG-BIT = 45L
-public val REF-TAG-BIT = 0L
-public val INT-TAG-BIT = 0L
-public val MARKER-TAG-BIT = 1L
-public val BYTE-TAG-BIT = 2L
-public val CHAR-TAG-BIT = 3L
-public val FLOAT-TAG-BIT = 4L
-public val DOUBLE-TAG-BIT = 5L
-public val REF-TAG-BITS = 0L
-public val INT-TAG-BITS = 1L << INT-TAG-BIT
-public val MARKER-TAG-BITS = 1L << MARKER-TAG-BIT
-public val BYTE-TAG-BITS = 1L << BYTE-TAG-BIT
-public val CHAR-TAG-BITS = 1L << CHAR-TAG-BIT
-public val FLOAT-TAG-BITS = 1L << FLOAT-TAG-BIT
-public val DOUBLE-TAG-BITS-MIN = 1L << DOUBLE-TAG-BIT
+public val NUM-TAG-BITS        =  4
+public val BASE-TAG-BIT        = 46L ;09876
+public val MAX-REF-TAG-BITS    =  3L ; 00xx
+public val INT-TAG-BITS        =  4L ; 0100
+public val MARKER-TAG-BITS     = 12L ; 1100
+public val BYTE-TAG-BITS       = 10L ; 1010
+public val CHAR-TAG-BITS       =  8L ; 1000
+public val FLOAT-TAG-BITS      =  9L ; 1001
+public val MIN-DOUBLE-TAG-BITS = 16L ;10000
 
 public defn tag-marker (x:Int) -> Long :
-  to-long(x) | (1L << (BASE-TAG-BIT + MARKER-TAG-BIT))
+  to-long(x) | (MARKER-TAG-BITS << BASE-TAG-BIT)
 
 ;============================================================
 ;================== Design of Instructions ==================

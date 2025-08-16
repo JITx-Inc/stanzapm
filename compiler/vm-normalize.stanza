@@ -56,7 +56,7 @@ public defn normalize (prog:VMPackage, backend:Backend) -> NormVMPackage :
       val func* = normalize(func(f), databuffer, backend, iotable, extern-table[id(f)])
       sub-func(f, func*)
     val norm-package = NormVMPackage(sub-funcs(prog, funcs*), datas(databuffer))
-    ; dump(norm-package, "logs")
+    dump(norm-package, "logs")
     norm-package
 
 ;============================================================
@@ -195,6 +195,10 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
       else :
         match(x) :
           (x:Marker|VoidMarker) :
+            ; val tmp = make-local(buffer, VMLong())
+            ; val bits = match(x:Marker) : typeid(x) else: 0x7fffffff
+            ; emit(buffer, SetIns(tmp, NumConst(bits)))
+            ; do-set-tag-bits(x*, tmp, MARKER-TAG-BITS)
             emit(buffer, SetIns(x*, x))
           (x:NumConst) :
             match(value(x)) :
@@ -377,26 +381,38 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
     val y = #V(y0)
     emit(buffer, Op1Ins(x, InterpretOp(), y))
 
+  defn do-set-tag-bits (dst:Local, src:Local|VMImm, tag-bits:Long) :
+    for off in 0 to NUM-TAG-BITS do :
+      if ((to-int(tag-bits) >> off) & 1) == 1 :
+        emit(buffer, Op2Ins(dst, SetBitOp(), NumConst(to-long(off) + BASE-TAG-BIT), src))
+    ; ; emit(buffer, Op2Ins(dst, SetBitOp(), NumConst(tag-bits + BASE-TAG-BIT), src))
+    ; ; ; val tmp-long = make-local(buffer, VMLong())
+    ; ; ; emit(buffer, Op2Ins(tmp-long, ShlOp(), NumConst(tag-bits), NumConst(BASE-TAG-BIT)))
+    ; ; ; emit(buffer, Op2Ins(tmp, OrOp(), tmp, tmp-long))
+    ; val tmp-long1 = make-local(buffer, VMLong())
+    ; val tmp-long2 = make-local(buffer, VMLong())
+    ; emit(buffer, SetIns(tmp-long1, NumConst(tag-bits)))
+    ; emit(buffer, Op2Ins(tmp-long2, ShlOp(), tmp-long1, NumConst(BASE-TAG-BIT)))
+    ; emit(buffer, Op2Ins(dst, OrOp(), src, tmp-long2))
+
   ;Normalize a tagging operation
   defn norm-tag-op (x:Local, y0:VMImm, typeid:Int) :
     val y = #V(y0)
     val type = id(iotable[typeid]) as TypeId
     switch(type) :
-      CORE-CHAR-ID : set-tag-bit(CHAR-TAG-BIT, 8)
-      CORE-BYTE-ID : set-tag-bit(BYTE-TAG-BIT, 8)
-      CORE-INT-ID : set-tag-bit(INT-TAG-BIT, 32)
-      CORE-FLOAT-ID : tag-float-with-bits(FLOAT-TAG-BIT)
+      CORE-CHAR-ID : set-tag-bits(CHAR-TAG-BITS, 8)
+      CORE-BYTE-ID : set-tag-bits(BYTE-TAG-BITS, 8)
+      CORE-INT-ID : set-tag-bits(INT-TAG-BITS, 32)
+      CORE-FLOAT-ID : tag-float-with-bits(FLOAT-TAG-BITS)
       CORE-DOUBLE-ID : tag-double()
       else : fatal("Type not supported: %_" % [type])
     where :
-      defn set-tag-bit (tag-bit:Long, width:Int) :
+      defn set-tag-bits (tag-bits:Long, width:Int) :
         val tmp = make-local(buffer, VMLong())
         emit(buffer, SetIns(tmp, y))
         if width == 8 : 
           emit(buffer, Op2Ins(tmp, AndOp(), tmp, NumConst(255))) ;TODO: would be nice if SetIns would do this
-        do-set-tag-bit(tmp, tag-bit)
-      defn do-set-tag-bit (tmp:Local, tag-bit:Long) :
-        emit(buffer, Op2Ins(x, SetBitOp(), NumConst(tag-bit + BASE-TAG-BIT), tmp))
+        do-set-tag-bits(x, tmp, tag-bits)
       ; defn tag-float-with-bits (tag-bit:Long) :
       ;   val tmp-long1 = make-local(buffer, VMLong())
       ;   val tmp-long2 = make-local(buffer, VMLong())
@@ -407,14 +423,14 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
       ;   emit(buffer, Op2Ins(tmp-long3, ShrOp(), tmp-long2, NumConst(32L)))
       ;   ; norm-conv-op(tmp, tmp-int)
       ;   do-set-tag-bit(tmp-long3, tag-bit)
-      defn tag-float-with-bits (tag-bit:Long) :
+      defn tag-float-with-bits (tag-bits:Long) :
         val tmp = make-local(buffer, VMLong())
         val tmp-int = make-local(buffer, VMInt())
         norm-interpret-op(tmp-int, y)
         ; norm-interpret-op(tmp, y)
         emit(buffer, Op2Ins(tmp, AddOp(), tmp-int, NumConst(0)))
         ; norm-conv-op(tmp, tmp-int)
-        do-set-tag-bit(tmp, tag-bit)
+        do-set-tag-bits(x, tmp, tag-bits)
       ; defn tag-float-with-bits (tag-bit:Long) :
       ;   val tmp = make-local(buffer, VMLong())
       ;   val tmp-int = make-local(buffer, VMInt())
@@ -429,19 +445,22 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
   ;Detag a primitive
   defn norm-detag-op (x:Local, y0:VMImm, typeid:Int) :
     val y = #V(y0)
-    val type = id(iotable[typeid]) as TypeId
-    switch(type) :
+    val ttype = id(iotable[typeid]) as TypeId
+    switch(ttype) :
       CORE-CHAR-ID : detag-int()
       CORE-BYTE-ID : detag-int()
       CORE-INT-ID : detag-int()
       CORE-FLOAT-ID : detag-float()
       CORE-DOUBLE-ID : detag-double()
-      else : fatal("Type not supported: %_" % [type])
+      else : fatal("Type not supported: %_" % [ttype])
     where :
       defn detag-int () :
-        val tmp-int = make-local(buffer, VMInt())
-        norm-conv-op(tmp-int, y)
-        norm-conv-op(x, tmp-int)
+        if type(buffer, x) != VMInt() :
+          val tmp-int = make-local(buffer, VMInt())
+          norm-conv-op(tmp-int, y)
+          norm-conv-op(x, tmp-int)
+        else :
+          norm-conv-op(x, y)
   
       ; defn detag-float () :
       ;   val tmp-long1 = make-local(buffer, VMLong())
@@ -551,12 +570,19 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
     L1(x*, ConvOp(), x)
     x*
   defn tag-as-int (x:Local, y:VMImm) :
-    L(x, SetBitOp(), NumConst(BASE-TAG-BIT + INT-TAG-BIT), y)
+    ; val tmp = make-local(buffer, VMLong())
+    ; emit(buffer, Op2Ins(tmp, ShlOp(), NumConst(INT-TAG-BITS), NumConst(BASE-TAG-BIT)))
+    ; emit(buffer, Op2Ins(tmp, ShlOp(), NumConst(INT-TAG-BITS), NumConst(BASE-TAG-BIT)))
+    do-set-tag-bits(x, y, INT-TAG-BITS)
 
   ;Lower HiStanza primitive operation
   defn lower (x:Local, op:VMOp, y:VMImm, z:VMImm) :
     defn tag-as-bool (x:Local, y:VMImm) :
-      L(x, SetBitOp(), NumConst(BASE-TAG-BIT + MARKER-TAG-BIT), y)
+      ; val tmp = make-local(buffer, VMLong())
+      ; emit(buffer, Op2Ins(tmp, ShlOp(), NumConst(MARKER-TAG-BITS), NumConst(BASE-TAG-BIT)))
+      ; emit(buffer, Op2Ins(x, OrOp(), y, tmp))
+      do-set-tag-bits(x, y, MARKER-TAG-BITS)
+      ; L(x, SetBitOp(), NumConst(BASE-TAG-BIT + MARKER-TAG-BIT), y)
     match(op) :
       (op:RefEqOp) :
         val tmp = make-local(buffer, VMLong())

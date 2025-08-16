@@ -618,22 +618,14 @@ void init_opcode_names () {
   stack_pointer = stk->stack_pointer; \
   stack_limit = (char*)(stk->frames) + stk->size;
 
-//TODO: CHECK and FIX DOUBLE
 const uint64_t BASE_TAG_BIT = 46L;
-const uint64_t REF_TAG_BIT = 0L;
-const uint64_t INT_TAG_BIT = 0L;
-const uint64_t MARKER_TAG_BIT = 1L;
-const uint64_t BYTE_TAG_BIT = 2L;
-const uint64_t CHAR_TAG_BIT = 3L;
-const uint64_t FLOAT_TAG_BIT = 4L;
-const uint64_t DOUBLE_TAG_BIT = 5L;
-const uint64_t REF_TAG_BITS = 0L;
-const uint64_t INT_TAG_BITS = 1L << (INT_TAG_BIT);
-const uint64_t MARKER_TAG_BITS = 1L << (MARKER_TAG_BIT);
-const uint64_t BYTE_TAG_BITS = 1L << (BYTE_TAG_BIT);
-const uint64_t CHAR_TAG_BITS = 1L << (CHAR_TAG_BIT);
-const uint64_t FLOAT_TAG_BITS = 1L << (FLOAT_TAG_BIT);
-const uint64_t DOUBLE_TAG_BITS_MIN = 1L << (DOUBLE_TAG_BIT);
+const uint64_t REF_TAG_BITS_MAX = 3L;
+const uint64_t INT_TAG_BITS = 4L;
+const uint64_t MARKER_TAG_BITS = 12L;
+const uint64_t BYTE_TAG_BITS = 10L;
+const uint64_t CHAR_TAG_BITS = 8L;
+const uint64_t FLOAT_TAG_BITS = 9L;
+const uint64_t DOUBLE_TAG_BITS_MIN = 16L;
 const uint64_t INT_TAG_BITS_L = INT_TAG_BITS << BASE_TAG_BIT;
 const uint64_t MARKER_TAG_BITS_L = MARKER_TAG_BITS << BASE_TAG_BIT;
 const uint64_t BYTE_TAG_BITS_L = BYTE_TAG_BITS << BASE_TAG_BIT;
@@ -1742,7 +1734,7 @@ void vmloop (VMState* vms, uint64_t stanza_crsp, int64_t starting_fid){
       uint64_t obj = LOCAL(x);
       int tagbits = (int)(obj >> BASE_TAG_BIT);
       int tag = LOCAL(y);
-      if(tagbits == 0){
+      if(tagbits <= REF_TAG_BITS_MAX){
         int* p = (int*)(obj);
         F_JUMP(*p == tag);
       }else{
@@ -2377,13 +2369,13 @@ typedef struct {
   int value;
 } DKV;
 
-//                    0  1         2  3  4          5, 6, 7, 8,         9, 0, 1, 2, 3, 4, 5, 16
-int PRIM_TYPEIDS[] = {0, INT_TYPE, 0, 0, BYTE_TYPE, 0, 0, 0, CHAR_TYPE, 0, 0, 0, 0, 0, 0, 0, FLOAT_TYPE};
+//                    0  1  2  3  4         5, 6, 7, 8,         9,          0,         1, 2, 3, 4, 5, 16
+int PRIM_TYPEIDS[] = {0, 0, 0, 0, INT_TYPE, 0, 0, 0, CHAR_TYPE, FLOAT_TYPE, BYTE_TYPE, 0, 0, 0, 0, 0, 0};
 
 int argtype (VMState* vms, int i){
   uint64_t x = vms->registers[i];
   int tagbits = (int)(x >> BASE_TAG_BIT);
-  if(tagbits == REF_TAG_BITS){
+  if(tagbits <= REF_TAG_BITS_MAX){
     int* p = (int*)(x);
     return *p;
   }

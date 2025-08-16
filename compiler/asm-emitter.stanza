@@ -419,15 +419,23 @@ defn gen (os:OutputStream, ins:Ins, backend:Backend) :
 
    ;     Set Instruction
    ;     ---------------
-   defn #set (t:ASMType, x:Loc, y:Imm) :
+   defn set-size-suffix (t:ASMType, y:Imm) -> String :
+     match(y:IntImm) :
+       match(value(y)) :
+         (x:Long) : "absq" when ((x >> 48L) > 0L) else size-suffix(t)
+         (x) : size-suffix(t)
+     else :
+       size-suffix(t)
+
+   defn #set (t:ASMType, x:Loc, y:Imm, force?:True|False = false) :
       match(y) :
          (y:Mem|ExMem) :
             #println(os, "   leaq (%_ + %_)(%%rip), %_" % [#lbl(y), offset(y), #imm(t,x)])
          (y) :
             if #i(t) :
               ; if (t is-not LongT) or x != y :
-              if x != y :
-                #println(os, "   mov%_ %_, %_" % [size-suffix(t), #imm(t,y), #imm(t,x)])
+              if force? or x != y :
+                #println(os, "   mov%_ %_, %_" % [set-size-suffix(t, y), #imm(t,y), #imm(t,x)])
             else if #f(t) : #println(os, "   movs%_ %_, %_" % [size-suffix(t), #imm(t,y), #imm(t,x)])
             else : fatal("Unreachable")
 
@@ -449,7 +457,7 @@ defn gen (os:OutputStream, ins:Ins, backend:Backend) :
             else : true
          ;Truncation Conversion
          if int-less-eq?(xtype, ytype) :
-            #set(xtype, x, y)
+            #set(xtype, x, y, true)
          ;Extension Conversion
          else :
             val mov = "movz" when #B(ytype) else "movs"
@@ -459,7 +467,7 @@ defn gen (os:OutputStream, ins:Ins, backend:Backend) :
       else if #f(xtype) and #f(ytype) :
          ;If Equal
          if xtype == ytype :
-            #set(xtype, x, y)
+            #set(xtype, x, y, true)
          else :
             #println(os, "   cvts%_2s%_ %_, %_" % [ysz, xsz, #imm(ytype, y), #imm(xtype, x)])
 

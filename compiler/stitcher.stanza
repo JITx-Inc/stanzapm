@@ -565,14 +565,14 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
               else if x == id-indices[CORE-CHAR-ID] : INT(CHAR-TAG-BITS)
               else if x == id-indices[CORE-INT-ID] : INT(INT-TAG-BITS)
               else if x == id-indices[CORE-FLOAT-ID] : INT(FLOAT-TAG-BITS)
-              else if x == id-indices[CORE-DOUBLE-ID] : INT(DOUBLE-TAG-BITS-MIN)
+              else if x == id-indices[CORE-DOUBLE-ID] : INT(MIN-DOUBLE-TAG-BITS)
               else : fatal("Not a primitive type")
             val op = UgeOp() when (x == id-indices[CORE-DOUBLE-ID]) else EqOp()
             E $ BreakI(target, op, BITS, tagbits)
 
           ;Skip the branches if the object is not of that type
-          if marker-targets? : E $ BreakI(M(marker-branches), EqOp(), BITS, INT(MARKER-TAG-BITS))
-          if ref-targets? :    E $ BreakI(M(ref-branches),    EqOp(), BITS, INT(REF-TAG-BITS))
+          if marker-targets? : E $ BreakI(M(marker-branches), EqOp(),  BITS, INT(MARKER-TAG-BITS))
+          if ref-targets? :    E $ BreakI(M(ref-branches),    UleOp(), BITS, INT(MAX-REF-TAG-BITS))
           E $ Goto(default-target)
 
           ;Jump to the appropriate reference branches if the object
@@ -684,14 +684,14 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
               else if x == id-indices[CORE-CHAR-ID] : INT(CHAR-TAG-BITS)
               else if x == id-indices[CORE-INT-ID] : INT(INT-TAG-BITS)
               else if x == id-indices[CORE-FLOAT-ID] : INT(FLOAT-TAG-BITS)
-              else if x == id-indices[CORE-DOUBLE-ID] : INT(DOUBLE-TAG-BITS-MIN)
+              else if x == id-indices[CORE-DOUBLE-ID] : INT(MIN-DOUBLE-TAG-BITS)
               else : fatal("Not a primitive type")
             val op = UgtOp() when (x == id-indices[CORE-DOUBLE-ID]) else EqOp()
             E $ BreakI(M(pass-lbl), op, BITS, tagbits)
 
           ;Skip the branches if the object is not of that type
-          if marker-targets? : E $ BreakI(M(marker-branches), EqOp(), BITS, INT(MARKER-TAG-BITS))
-          if ref-targets? :    E $ BreakI(M(ref-branches),    EqOp(), BITS, INT(REF-TAG-BITS))
+          if marker-targets? : E $ BreakI(M(marker-branches), EqOp(),  BITS, INT(MARKER-TAG-BITS))
+          if ref-targets? :    E $ BreakI(M(ref-branches),    UleOp(), BITS, INT(MAX-REF-TAG-BITS))
           E $ Goto(M(end-lbl))
           
           ;Ref branches
