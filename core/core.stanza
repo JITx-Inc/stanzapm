@@ -1586,10 +1586,10 @@ lostanza defn marking-stack-full (heap:ptr<Heap>) -> long :
   return heap.stack-top == heap.stack-start
 
 #if-defined(BOOTSTRAP) :
-  lostanza defn PTR-TAGBITS () -> long :
-    return 1L
   lostanza defn tagbits (v:long) -> long :
     return v & 7L
+  lostanza defn ref-ptr? (v:long) -> long :
+    return tagbits(v) == 1L
   lostanza defn untag-ref-ptr (r:long) -> ptr<long> :
     return (r - 1) as ptr<long>
   lostanza defn tag-ptr-ref (r:ptr<long>) -> long :
@@ -1597,10 +1597,10 @@ lostanza defn marking-stack-full (heap:ptr<Heap>) -> long :
   lostanza defn untag-ref-marker (r:long) -> long :
     return (r >> 3L)
 #else :
-  lostanza defn PTR-TAGBITS () -> long :
-    return 0L
   lostanza defn tagbits (v:long) -> long :
     return v >> BASE-TAG-BIT
+  lostanza defn ref-ptr? (v:long) -> long :
+    return tagbits(v) <= 3L
   lostanza defn untag-ref-ptr (r:long) -> ptr<long> :
     return r as ptr<long>
   lostanza defn tag-ptr-ref (r:ptr<long>) -> long :
@@ -1617,7 +1617,7 @@ lostanza defn mark-and-push (ref:ptr<long>, vms:ptr<VMState>) -> ref<False> :
   ;Retrieve the value at the given heap pointer.
   val v = [ref]
   ;Is this a reference to a Stanza heap object?
-  if tagbits(v) == PTR-TAGBITS() :
+  if ref-ptr?(v) :
     ;Remove the tagbits to retrieve the object pointer.
     val p = untag-ref-ptr(v) as ptr<long>
     ;Mark the object, and test whether it has already previously been marked.
@@ -1635,7 +1635,7 @@ public lostanza defn mark-from-root (ref:ptr<long>, vms:ptr<VMState>) -> ref<Fal
   ;Retrieve the value at the given heap pointer.
   val v = [ref]
   ;Is this a reference to a Stanza heap object?
-  if tagbits(v) == PTR-TAGBITS() :
+  if ref-ptr?(v) :
     ;Remove the tag bits to retrieve the object pointer.
     val p = untag-ref-ptr(v)
     ;Mark the object, and continue marking the object graph if it
@@ -2100,7 +2100,7 @@ lostanza defn relocate-reference (ref:ptr<long>, vms:ptr<VMState>) -> ref<False>
   ;Retrieve the value at the given heap pointer.
   val v = [ref]
   ;Is this a reference to a Stanza heap object?
-  if tagbits(v) == PTR-TAGBITS() :
+  if ref-ptr?(v) :
     ;Remove the tag bits to retrieve the object pointer.
     val p = untag-ref-ptr(v)
     ;Only pointers to objects in the compaction area are relocated.
@@ -2125,7 +2125,7 @@ lostanza defn relocate-or-reverse-reference (ref:ptr<long>, vms:ptr<VMState>) ->
   ;Retrieve the value at the given heap pointer.
   val v = [ref]
   ;Is this a reference to a Stanza heap object?
-  if tagbits(v) == PTR-TAGBITS() :
+  if ref-ptr?(v) :
     ;Remove the tag bits to retrieve the object pointer.
     val p = untag-ref-ptr(v)
     ;Only pointers to objects in the compaction area are relocated.
@@ -2243,7 +2243,7 @@ lostanza defn check-write-barrier-invariants! (p:ptr<long>, vms:ptr<VMState>) ->
   ;Perform these checks:
   ;Case pointer to young-gen: Ensure that the remembered bit is set.
   val objref = [p]
-  if tagbits(objref) == PTR-TAGBITS() :
+  if ref-ptr?(objref) :
     val objptr = untag-ref-ptr(objref)
     ;Is the pointer pointing into the young gen?
     if objptr >= heap.old-objects-end :
@@ -2337,7 +2337,7 @@ lostanza defn copy-object (ref:ptr<long>, vms:ptr<VMState>) -> ref<False> :
   ;Retrieve the value at the given heap pointer and preemptively remove the tag bit.
   val v = [ref]
   ;Is this a reference to a Stanza heap object?
-  if tagbits(v) == PTR-TAGBITS() :
+  if ref-ptr?(v) :
     ;Cast the bits to an object pointer.
     val src = untag-ref-ptr(v)
     ;Is it in the nursery?
