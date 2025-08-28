@@ -81,7 +81,7 @@ defn lower (epackage:EPackage, optimize?:True|False, profile?:True|False, covera
       within log-time(EL-TIMERS[pass-name], /suffix(name(epackage))) :
         cur-package = f(cur-package)
         update-tables() when update-tables?
-      ; dump(cur-package, "logs", suffix)
+      ;dump(cur-package, "logs", suffix)
       #if-not-defined(OPTIMIZE) :
         ensure-unique-identifiers!(cur-package)
     defn run-pass (pass-name:String, f:(EPackage, IOTable) -> EPackage, suffix:String, update-tables?:True|False) :
@@ -146,8 +146,6 @@ defn lower (epackage:EPackage, optimize?:True|False, profile?:True|False, covera
     run-pass("Simplify Typeof", simplify-typeof, "simplify-typeof2", false)
     run-pass("Lift Closures", lift-closures, "closurelifted", false)
     run-pass("Lift Type Objects", lift-type-objects, "typelifted", false)
-
-    ;dump(cur-package, "logs", "end")
 
     ;Return processed package
     cur-package
