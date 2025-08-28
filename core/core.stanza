@@ -11220,40 +11220,38 @@ public defmulti name (t:TypeObject) -> String
 ;====================== Profiling ===========================
 ;============================================================
 
-#if-not-defined(BOOTSTRAP) :
+public var last-profiler-time:Long = 0L
 
-  public var last-profiler-time:Long = 0L
-
-  ;Called from app to record stack trace as return addresses in buffer
-  ;Demarcate end of each coroutine stack with -2 and end trace with -1
-  lostanza defn profile-stack-trace () -> ref<False> :
-    val vms:ptr<VMState> = call-prim flush-vm()
-    [vms.profile-flag] = 2L
-    val buffer = vms.profile-buffer
-    add(buffer, call-c clib/current_time_ms())
-    add(buffer, -2L) ; time marker
-    labels :
-      begin :
-        goto loop(current-coroutine)
-      loop (co:ref<RawCoroutine>) :
-        val stack = co.stack
-        val end-sp = stack.stack-pointer
-        labels :
-          begin : goto loop-frame(stack.frames)
-          loop-frame (sp:ptr<StackFrame>) :
-            if sp.return > 0L :
-              add(buffer, sp.return)
-            if sp < end-sp : ;Continue if we're not at the end of the stack
-              val map-index = sp.liveness-map
-              val stackmap = vms.stackmap-table[map-index]
-              goto loop-frame(sp + stackmap.size)
-        add(buffer, -2L) ;End coroutine stack marker
-        match(co.parent) :
-          (p:ref<RawCoroutine>) : goto loop(p)
-          (p:ref<False>) : ()
-    add(buffer, -1L) ;End stack trace marker 
-    [vms.profile-flag] = 0L
-    return false
+;Called from app to record stack trace as return addresses in buffer
+;Demarcate end of each coroutine stack with -2 and end trace with -1
+lostanza defn profile-stack-trace () -> ref<False> :
+  val vms:ptr<VMState> = call-prim flush-vm()
+  [vms.profile-flag] = 2L
+  val buffer = vms.profile-buffer
+  add(buffer, call-c clib/current_time_ms())
+  add(buffer, -2L) ; time marker
+  labels :
+    begin :
+      goto loop(current-coroutine)
+    loop (co:ref<RawCoroutine>) :
+      val stack = co.stack
+      val end-sp = stack.stack-pointer
+      labels :
+        begin : goto loop-frame(stack.frames)
+        loop-frame (sp:ptr<StackFrame>) :
+          if sp.return > 0L :
+            add(buffer, sp.return)
+          if sp < end-sp : ;Continue if we're not at the end of the stack
+            val map-index = sp.liveness-map
+            val stackmap = vms.stackmap-table[map-index]
+            goto loop-frame(sp + stackmap.size)
+      add(buffer, -2L) ;End coroutine stack marker
+      match(co.parent) :
+        (p:ref<RawCoroutine>) : goto loop(p)
+        (p:ref<False>) : ()
+  add(buffer, -1L) ;End stack trace marker 
+  [vms.profile-flag] = 0L
+  return false
 
 ;############################################################
 ;################## Math Package ############################
