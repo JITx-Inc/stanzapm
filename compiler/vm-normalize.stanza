@@ -473,11 +473,6 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
       ;   norm-conv-op(tmp-int, tmp-long2)
       ;   norm-interpret-op(x, tmp-int)
 
-      ; defn detag-float () :
-      ;   val tmp-int = make-local(buffer, VMInt())
-      ;   norm-conv-op(tmp-int, y)
-      ;   norm-interpret-op(x, tmp-int)
-
       defn detag-float () :
         val tmp-int = make-local(buffer, VMInt())
         norm-conv-op(tmp-int, y)
