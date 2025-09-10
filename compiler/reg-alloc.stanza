@@ -263,11 +263,6 @@ public defn allocate-registers (context-id:Int,
     println("==== Stack Map ====")
     println(smap)
 
-  gen-shuffles()
-  if print? :
-    println("==== Gen Shuffles ====")
-    print-prog()
-
   collapse-blocks()
   if print? :
     println("==== Collapse Blocks ====")
@@ -2349,21 +2344,19 @@ defn flip (o:VMOp) -> VMOp :
 ;=================== Block Collapsing =======================
 ;============================================================
 
-defn gen-shuffles () :
-  
-  defn emit (out:Block, e:Ins) :
-    val add? = match(e:ShuffleReg|ShuffleFReg) : xs(e) != ys(e)
-               else : true
-    add(ins(out), e) when add?
-  defn emit (out:Block, es:Seqable<Ins>) : do(emit{out, _}, es)
-
-  val new-blocks = Vector<Block>()
+defn collapse-blocks () :
+  ;============================
+  ;==== Instruction Buffer ====
+  ;============================
+  val instructions = Vector<Ins>()
+  defn emit (e:Ins) : add(instructions, e)
+  defn emit (es:Seqable<Ins>) : add-all(instructions, es)
 
   ;===================
   ;==== Port Glue ====
   ;===================
   ;Perform xs = ys in parallel
-  defn glue-ports (out:Block, xs:List<Port>, ys:List<Port>) :
+  defn glue-ports (xs:List<Port>, ys:List<Port>) :
     ;Instructions buffers
     val saves = Vector<Ins>()
     val loads = Vector<Ins>()
@@ -2395,10 +2388,10 @@ defn gen-shuffles () :
         (rx, ry) : false
 
     ;Output to main instruction buffer
-    emit(out, saves)
-    emit(out, ShuffleReg(values(shuffles), keys(shuffles)))
-    emit(out, ShuffleFReg(values(fshuffles), keys(fshuffles)))
-    emit(out, loads)
+    emit(saves)
+    emit(ShuffleReg(values(shuffles), keys(shuffles)))
+    emit(ShuffleFReg(values(fshuffles), keys(fshuffles)))
+    emit(loads)
 
   ;=======================
   ;==== Glue Location ====
@@ -2413,38 +2406,6 @@ defn gen-shuffles () :
       val n = head(next(blk))
       if length(PREDECESSORS[n]) > 1 :
         IN-PORTS[n]
-
-  ;===================
-  ;==== Algorithm ====
-  ;===================
-  for (blk in BLOCKS, b in 0 to false) do :
-    val out = Block(Vector<Ins>(), next(blk))
-    ;Emit entry glue
-    match(input-glue(b)) :
-      (ps:List<Port>) : glue-ports(out, IN-PORTS[b], ps)
-      (ps:False) : false
-
-    ;Emit instructions
-    emit(out, ins(blk))
-
-    ;Emit exit glue
-    match(output-glue(blk)) :
-      (ps:List<Port>) : glue-ports(out, ps, OUT-PORTS[b])
-      (ps:False) : false
-
-    add(new-blocks, out)
-
-  ;Return instruction buffer
-  clear(BLOCKS)
-  add-all(BLOCKS, new-blocks)
-
-defn collapse-blocks () :
-  ;============================
-  ;==== Instruction Buffer ====
-  ;============================
-  val instructions = Vector<Ins>()
-  defn emit (e:Ins) : add(instructions, e) 
-  defn emit (es:Seqable<Ins>) : add-all(instructions, es)
 
   ;====================
   ;==== Goto Block ====
@@ -2470,30 +2431,15 @@ defn collapse-blocks () :
   ;===================
   for (blk in BLOCKS, b in 0 to false) do :
     ;Is block i coming up next?
-    defn long-upcoming? (b:Int, i:Int) :
-      if i == b + 1 :
-        true
-      else :
-        let any? (j:Int = b + 1) :
-          if j < length(BLOCKS) :
-            val blk = BLOCKS[j]
-            if empty?(ins(blk)) and head(next(blk)) == j + 1 :
-              if i == j + 1 :
-                true
-              else :
-                any?(j + 1)
-    defn long-upcoming? (i:Int) : long-upcoming?(b, i)
     defn upcoming? (i:Int) : i == b + 1
-
-    defn goto-block? (bi:Int) -> True|False :
-      val blk = BLOCKS[bi]
-      empty?(ins(blk)) and length(next(blk)) == 1 and head(next(blk)) != bi + 1
-
-    defn block-goto (bi:Int) -> Int :
-      head(next(BLOCKS[bi]))
 
     ;Emit block label
     emit(Label(lbls[b]))
+
+    ;Emit entry glue
+    match(input-glue(b)) :
+      (ps:List<Port>) : glue-ports(IN-PORTS[b], ps)
+      (ps:False) : false
 
     ;Emit instructions
     for e in ins(blk) do :
@@ -2501,21 +2447,11 @@ defn collapse-blocks () :
         (e:Branch) :
           val conseq = next(blk)[0]
           val alt = next(blk)[1]
-          match(long-upcoming?(conseq), long-upcoming?(alt)) :
+          match(upcoming?(conseq), upcoming?(alt)) :
             (a:True, b:False) :
-              if goto-block?(conseq) and long-upcoming?(conseq, alt) :
-                ; println("GBC %_/%_" % [lbls[conseq], lbls[alt]])
-                emit(Break(lbls[block-goto(conseq)], op(e), xs(e)))
-                BLOCKS[conseq] = Block(Vector<Ins>(), List(conseq + 1))
-              else :
-                emit(Break(lbls[alt], flip(op(e)), xs(e)))
+              emit(Break(lbls[alt], flip(op(e)), xs(e)))
             (a:False, b:True) :
-              if goto-block?(alt) and long-upcoming?(alt, conseq) :
-                ; println("GBA %_/%_" % [lbls[alt], lbls[conseq]])
-                emit(Break(lbls[block-goto(alt)], flip(op(e)), xs(e)))
-                BLOCKS[alt] = Block(Vector<Ins>(), List(alt + 1))
-              else :
-                emit(Break(lbls[conseq], op(e), xs(e)))
+              emit(Break(lbls[conseq], op(e), xs(e)))
             (a:False, b:False) :
               emit(Break(lbls[conseq], op(e), xs(e)))
               emit(Goto(lbls[alt]))
@@ -2531,15 +2467,16 @@ defn collapse-blocks () :
         (e) :
           emit(e)
 
+    ;Emit exit glue
+    match(output-glue(blk)) :
+      (ps:List<Port>) : glue-ports(ps, OUT-PORTS[b])
+      (ps:False) : false
+
     ;Goto next block
     if ends-with-goto?(blk) :
       val n = head(next(blk))
-      ; println("LBL = %_ NXT = %_ UP? %_ LONG-UP? %_ DIFF? %_" % [lbls[b], lbls[n], upcoming?(n), long-upcoming?(n), upcoming?(n) != long-upcoming?(n)])
-      emit(Goto(lbls[n])) when not long-upcoming?(n)
+      emit(Goto(lbls[n])) when not upcoming?(n)
 
-  ; println("\n---")
-  ; do(println, instructions)
-  ; println("")
   ;Return instruction buffer
   clear(BLOCKS)
   add(BLOCKS, Block(instructions, List()))
