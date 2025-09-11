@@ -40,7 +40,7 @@ defmethod print (o:OutputStream, x:SetItem) :
 ;Binary search
 ;Returns n such that the first n numbers in xs < v
 defn bsearch<?T,?S> (less?: (T, S) -> True|False,
-                     xs:Array<?T>,
+                     xs:RawArray<?T>,
                      n:Int,
                      v:?S) -> Int :
   ;All items with index less than i are known to be smaller than v.
@@ -94,11 +94,11 @@ public defmulti set-length<?T> (v:Vector<?T>, length:Int, x:T) -> False
 
 public defn Vector<T> (cap:Int) -> Vector<T> :
    core/ensure-non-negative("capacity", cap)
-   var array = Array<T>(cap)
+   var array = RawArray<T>(cap)
    var size = 0
 
    defn set-capacity (c:Int) :
-      val new-array = Array<T>(c)
+      val new-array = RawArray<T>(c)
       new-array[0 to size] = array
       array = new-array
          
@@ -179,7 +179,7 @@ public defn Vector<T> (cap:Int) -> Vector<T> :
       defmethod clear (this, n:Int, x0:T) :
          if length(array) < n :
             val cap = max(n, 2 * length(array))
-            array = Array<T>(cap, x0)
+            array = RawArray<T>(cap, x0)
             size = n
          else :
             set-all(array, 0 to n, x0)
@@ -280,13 +280,13 @@ public defmulti peek<?T> (q:Queue<?T>) -> T
 public defn Queue<T> (initial-cap:Int) -> Queue<T> :
    core/ensure-non-negative("capacity", initial-cap)
    var cap:Int = next-pow2(initial-cap)
-   var array:Array<T> = Array<T>(cap)
+   var array:RawArray<T> = RawArray<T>(cap)
    var begin:Int = 0
    var size:Int = 0
 
    defn ensure-capacity (c:Int) :
       defn set-capacity (c:Int) :
-         val new-array = Array<T>(c)
+         val new-array = RawArray<T>(c)
          for i in 0 to size do :
             new-array[i] = array[wrapped-index(i)]
          array = new-array
@@ -448,7 +448,7 @@ public defn HashTable<K,V> (cap0:Int
     cap = c
     limit = c * 3 / 4
     mask = cap - 1
-    slots = Array<Sentinel|TableItem<K,V>|Array<TableItem<K,V>>>(cap, sentinel())
+    slots = RawArray<Sentinel|TableItem<K,V>|RawArray<TableItem<K,V>>>(cap, sentinel())
     sizes = IntArray(cap, 0)
     size = 0
 
@@ -472,11 +472,11 @@ public defn HashTable<K,V> (cap0:Int
     match?(a, hash(b), key(b))
 
   ;Find number of items whose hash is less than h
-  defn num-before (xs:Array<TableItem<K,V>>, n:Int, h:Int) :
+  defn num-before (xs:RawArray<TableItem<K,V>>, n:Int, h:Int) :
     bsearch({hash(_) < _}, xs, n, h)
 
   ;Look for item with given hash and key starting from i
-  defn* index-of-item (xs:Array<TableItem<K,V>>, i:Int, n:Int, h:Int, k:K) :
+  defn* index-of-item (xs:RawArray<TableItem<K,V>>, i:Int, n:Int, h:Int, k:K) :
     if i < n :
       val x = xs[i]
       if hash(x) == h :
@@ -484,18 +484,18 @@ public defn HashTable<K,V> (cap0:Int
         else : index-of-item(xs, i + 1, n, h, k)
 
   ;Shift items in xs from i to n right by one element
-  defn* shift-right (xs:Array<TableItem<K,V>>, i:Int, n:Int) :
+  defn* shift-right (xs:RawArray<TableItem<K,V>>, i:Int, n:Int) :
     for j in n to i by -1 do :
       xs[j] = xs[j - 1]
 
   ;Shift items in xs from (i + 1) to n left by one element
-  defn* shift-left (xs:Array<TableItem<K,V>>, i:Int, n:Int) :
+  defn* shift-left (xs:RawArray<TableItem<K,V>>, i:Int, n:Int) :
     for j in i to (n - 1) do :
       xs[j] = xs[j + 1]    
 
   ;Copy to new array with hole in position i
-  defn* copy-with-hole (xs:Array<TableItem<K,V>>, i:Int, n:Int) :
-    val xs* = Array<TableItem<K,V>>(length(xs) * 2)
+  defn* copy-with-hole (xs:RawArray<TableItem<K,V>>, i:Int, n:Int) :
+    val xs* = RawArray<TableItem<K,V>>(length(xs) * 2)
     xs*[0 to i] = xs[0 to i]
     xs*[(i + 1) to (n + 1)] = xs[i to n]
     xs*
@@ -516,7 +516,7 @@ public defn HashTable<K,V> (cap0:Int
     do(put, items)
 
   defn create-bucket (slot:Int, x0:TableItem<K,V>, x1:TableItem<K,V>) :
-    val bucket = Array<TableItem<K,V>>(4)
+    val bucket = RawArray<TableItem<K,V>>(4)
     slots[slot] = bucket
     sizes[slot] = 2
     ;Populate bucket
@@ -529,7 +529,7 @@ public defn HashTable<K,V> (cap0:Int
       bucket[0] = x1
       bucket[1] = x0
 
-  defn add-to-bucket (slot:Int, bucket:Array<TableItem<K,V>>, i:Int, n:Int, x:TableItem<K,V>) :
+  defn add-to-bucket (slot:Int, bucket:RawArray<TableItem<K,V>>, i:Int, n:Int, x:TableItem<K,V>) :
     ;Case 1 of 2: Bucket has space.
     if n + 1 < length(bucket) :
       shift-right(bucket, i, n)
@@ -563,7 +563,7 @@ public defn HashTable<K,V> (cap0:Int
           create-bucket(slot, s, x)
           increment-size()
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
+      (s:RawArray<TableItem<K,V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, hash(x))
         match(index-of-item(s, i, n, hash(x), key(x))) :
@@ -591,7 +591,7 @@ public defn HashTable<K,V> (cap0:Int
         if match?(s,h,k) : value(s)
         else : default
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
+      (s:RawArray<TableItem<K,V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, h)
         match(index-of-item(s, i, n, h, k)) :
@@ -625,7 +625,7 @@ public defn HashTable<K,V> (cap0:Int
             increment-size()
           v          
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
+      (s:RawArray<TableItem<K,V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, h)
         match(index-of-item(s, i, n, h, k)) :
@@ -665,7 +665,7 @@ public defn HashTable<K,V> (cap0:Int
           increment-size()
           v
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
+      (s:RawArray<TableItem<K,V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, h)
         match(index-of-item(s, i, n, h, k)) :
@@ -691,7 +691,7 @@ public defn HashTable<K,V> (cap0:Int
       ;Case 2 of 3: Single item bucket
       (s:TableItem<K,V>) : match?(s,h,k)
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
+      (s:RawArray<TableItem<K,V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, h)
         index-of-item(s, i, n, h, k) is Int
@@ -713,7 +713,7 @@ public defn HashTable<K,V> (cap0:Int
           decrement-size()
           true
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<TableItem<K,V>>) :
+      (s:RawArray<TableItem<K,V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, h)
         match(index-of-item(s, i, n, h, k)) :
@@ -738,7 +738,7 @@ public defn HashTable<K,V> (cap0:Int
           val v = f(key(s) => value(s))
           slots[idx] = TableItem<K,V>(hash(s), key(s), v)
         ;Case 3 of 3: Multiple item bucket
-        (s:Array<TableItem<K,V>>) :
+        (s:RawArray<TableItem<K,V>>) :
           val n = sizes[idx]
           for i in 0 to n do :
             val x = s[i]
@@ -756,7 +756,7 @@ public defn HashTable<K,V> (cap0:Int
         match(slots[idx]) :
           (s:Sentinel) : false
           (s:TableItem<K,V>) : yield(f(s))
-          (s:Array<TableItem<K,V>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
+          (s:RawArray<TableItem<K,V>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
 
   ;======================
   ;==== Table Object ====
@@ -871,7 +871,7 @@ public defn IntTable<V> (cap0:Int
     cap = c
     limit = c * 3 / 4
     mask = cap - 1
-    slots = Array<Sentinel|IntItem<V>|Array<IntItem<V>>>(cap, sentinel())
+    slots = RawArray<Sentinel|IntItem<V>|RawArray<IntItem<V>>>(cap, sentinel())
     sizes = IntArray(cap, 0)
     size = 0
 
@@ -894,28 +894,28 @@ public defn IntTable<V> (cap0:Int
     match?(a, key(b))
 
   ;Find number of items whose hash is less than h
-  defn num-before (xs:Array<IntItem<V>>, n:Int, k:Int) :
+  defn num-before (xs:RawArray<IntItem<V>>, n:Int, k:Int) :
     bsearch({key(_) < _}, xs, n, k)
 
   ;Look for item with given hash and key starting from i
-  defn* index-of-item (xs:Array<IntItem<V>>, i:Int, n:Int, k:Int) :
+  defn* index-of-item (xs:RawArray<IntItem<V>>, i:Int, n:Int, k:Int) :
     if i < n :
       val x = xs[i]
       if key(x) == k : i
 
   ;Shift items in xs from i to n right by one element
-  defn* shift-right (xs:Array<IntItem<V>>, i:Int, n:Int) :
+  defn* shift-right (xs:RawArray<IntItem<V>>, i:Int, n:Int) :
     for j in n to i by -1 do :
       xs[j] = xs[j - 1]
 
   ;Shift items in xs from (i + 1) to n left by one element
-  defn* shift-left (xs:Array<IntItem<V>>, i:Int, n:Int) :
+  defn* shift-left (xs:RawArray<IntItem<V>>, i:Int, n:Int) :
     for j in i to (n - 1) do :
       xs[j] = xs[j + 1]    
 
   ;Copy to new array with hole in position i
-  defn* copy-with-hole (xs:Array<IntItem<V>>, i:Int, n:Int) :
-    val xs* = Array<IntItem<V>>(length(xs) * 2)
+  defn* copy-with-hole (xs:RawArray<IntItem<V>>, i:Int, n:Int) :
+    val xs* = RawArray<IntItem<V>>(length(xs) * 2)
     xs*[0 to i] = xs[0 to i]
     xs*[(i + 1) to (n + 1)] = xs[i to n]
     xs*
@@ -936,7 +936,7 @@ public defn IntTable<V> (cap0:Int
     do(put, items)
 
   defn create-bucket (slot:Int, x0:IntItem<V>, x1:IntItem<V>) :
-    val bucket = Array<IntItem<V>>(4)
+    val bucket = RawArray<IntItem<V>>(4)
     slots[slot] = bucket
     sizes[slot] = 2
     ;Populate bucket
@@ -949,7 +949,7 @@ public defn IntTable<V> (cap0:Int
       bucket[0] = x1
       bucket[1] = x0
 
-  defn add-to-bucket (slot:Int, bucket:Array<IntItem<V>>, i:Int, n:Int, x:IntItem<V>) :
+  defn add-to-bucket (slot:Int, bucket:RawArray<IntItem<V>>, i:Int, n:Int, x:IntItem<V>) :
     ;Case 1 of 2: Bucket has space.
     if n + 1 < length(bucket) :
       shift-right(bucket, i, n)
@@ -983,7 +983,7 @@ public defn IntTable<V> (cap0:Int
           create-bucket(slot, s, x)
           increment-size()
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
+      (s:RawArray<IntItem<V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, key(x))
         match(index-of-item(s, i, n, key(x))) :
@@ -1010,7 +1010,7 @@ public defn IntTable<V> (cap0:Int
         if match?(s,k) : value(s)
         else : default
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
+      (s:RawArray<IntItem<V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, k)
         match(index-of-item(s, i, n, k)) :
@@ -1043,7 +1043,7 @@ public defn IntTable<V> (cap0:Int
             increment-size()
           v          
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
+      (s:RawArray<IntItem<V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, k)
         match(index-of-item(s, i, n, k)) :
@@ -1082,7 +1082,7 @@ public defn IntTable<V> (cap0:Int
           increment-size()
           v
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
+      (s:RawArray<IntItem<V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, k)
         match(index-of-item(s, i, n, k)) :
@@ -1107,7 +1107,7 @@ public defn IntTable<V> (cap0:Int
       ;Case 2 of 3: Single item bucket
       (s:IntItem<V>) : match?(s,k)
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
+      (s:RawArray<IntItem<V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, k)
         index-of-item(s, i, n, k) is Int
@@ -1128,7 +1128,7 @@ public defn IntTable<V> (cap0:Int
           decrement-size()
           true
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<IntItem<V>>) :
+      (s:RawArray<IntItem<V>>) :
         val n = sizes[slot]
         val i = num-before(s, n, k)
         match(index-of-item(s, i, n, k)) :
@@ -1153,7 +1153,7 @@ public defn IntTable<V> (cap0:Int
           val v = f(key(s) => value(s))
           slots[idx] = IntItem<V>(key(s), v)
         ;Case 3 of 3: Multiple item bucket
-        (s:Array<IntItem<V>>) :
+        (s:RawArray<IntItem<V>>) :
           val n = sizes[idx]
           for i in 0 to n do :
             val x = s[i]
@@ -1171,7 +1171,7 @@ public defn IntTable<V> (cap0:Int
         match(slots[idx]) :
           (s:Sentinel) : false
           (s:IntItem<V>) : yield(f(s))
-          (s:Array<IntItem<V>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
+          (s:RawArray<IntItem<V>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
 
   ;======================
   ;==== Table Object ====
@@ -1290,7 +1290,7 @@ public defn HashSet<K> (cap0:Int
     cap = c
     limit = c * 3 / 4
     mask = cap - 1
-    slots = Array<Sentinel|SetItem<K>|Array<SetItem<K>>>(cap, sentinel())
+    slots = RawArray<Sentinel|SetItem<K>|RawArray<SetItem<K>>>(cap, sentinel())
     sizes = IntArray(cap, 0)
     size = 0
 
@@ -1315,11 +1315,11 @@ public defn HashSet<K> (cap0:Int
     key-equal?(key(a), key(b))
 
   ;Find number of items whose hash is less than h
-  defn num-before (xs:Array<SetItem<K>>, n:Int, x:SetItem<K>) :
+  defn num-before (xs:RawArray<SetItem<K>>, n:Int, x:SetItem<K>) :
     bsearch({hash(_) < hash(_)}, xs, n, x)
 
   ;Look for item with given hash and key starting from i
-  defn* index-of-item (xs:Array<SetItem<K>>, i:Int, n:Int, y:SetItem<K>) :
+  defn* index-of-item (xs:RawArray<SetItem<K>>, i:Int, n:Int, y:SetItem<K>) :
     if i < n :
       val x = xs[i]
       if hash(x) == hash(y) :
@@ -1327,18 +1327,18 @@ public defn HashSet<K> (cap0:Int
         else : index-of-item(xs, i + 1, n, y)
 
   ;Shift items in xs from i to n right by one element
-  defn* shift-right (xs:Array<SetItem<K>>, i:Int, n:Int) :
+  defn* shift-right (xs:RawArray<SetItem<K>>, i:Int, n:Int) :
     for j in n to i by -1 do :
       xs[j] = xs[j - 1]
 
   ;Shift items in xs from (i + 1) to n left by one element
-  defn* shift-left (xs:Array<SetItem<K>>, i:Int, n:Int) :
+  defn* shift-left (xs:RawArray<SetItem<K>>, i:Int, n:Int) :
     for j in i to (n - 1) do :
       xs[j] = xs[j + 1]    
 
   ;Copy to new array with hole in position i
-  defn* copy-with-hole (xs:Array<SetItem<K>>, i:Int, n:Int) :
-    val xs* = Array<SetItem<K>>(length(xs) * 2)
+  defn* copy-with-hole (xs:RawArray<SetItem<K>>, i:Int, n:Int) :
+    val xs* = RawArray<SetItem<K>>(length(xs) * 2)
     xs*[0 to i] = xs[0 to i]
     xs*[(i + 1) to (n + 1)] = xs[i to n]
     xs*
@@ -1359,7 +1359,7 @@ public defn HashSet<K> (cap0:Int
     do(put, items)
 
   defn create-bucket (slot:Int, x0:SetItem<K>, x1:SetItem<K>) :
-    val bucket = Array<SetItem<K>>(4)
+    val bucket = RawArray<SetItem<K>>(4)
     slots[slot] = bucket
     sizes[slot] = 2
     ;Populate bucket
@@ -1372,7 +1372,7 @@ public defn HashSet<K> (cap0:Int
       bucket[0] = x1
       bucket[1] = x0
 
-  defn add-to-bucket (slot:Int, bucket:Array<SetItem<K>>, i:Int, n:Int, x:SetItem<K>) :
+  defn add-to-bucket (slot:Int, bucket:RawArray<SetItem<K>>, i:Int, n:Int, x:SetItem<K>) :
     ;Case 1 of 2: Bucket has space.
     if n + 1 < length(bucket) :
       shift-right(bucket, i, n)
@@ -1408,7 +1408,7 @@ public defn HashSet<K> (cap0:Int
           increment-size()
           true
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<SetItem<K>>) :
+      (s:RawArray<SetItem<K>>) :
         val n = sizes[slot]
         val i = num-before(s, n, x)
         match(index-of-item(s, i, n, x)) :
@@ -1432,7 +1432,7 @@ public defn HashSet<K> (cap0:Int
       ;Case 2 of 3: Single item bucket
       (s:SetItem<K>) : match?(s,x)
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<SetItem<K>>) :
+      (s:RawArray<SetItem<K>>) :
         val n = sizes[slot]
         val i = num-before(s, n, x)
         index-of-item(s, i, n, x) is Int
@@ -1454,7 +1454,7 @@ public defn HashSet<K> (cap0:Int
           decrement-size()
           true
       ;Case 3 of 3: Multiple item bucket
-      (s:Array<SetItem<K>>) :
+      (s:RawArray<SetItem<K>>) :
         val n = sizes[slot]
         val i = num-before(s, n, x)
         match(index-of-item(s, i, n, x)) :
@@ -1476,7 +1476,7 @@ public defn HashSet<K> (cap0:Int
         match(slots[idx]) :
           (s:Sentinel) : false
           (s:SetItem<K>) : yield(f(s))
-          (s:Array<SetItem<K>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
+          (s:RawArray<SetItem<K>>) : for j in 0 to sizes[idx] do : yield(f(s[j]))
 
   ;======================
   ;==== Table Object ====
@@ -1544,7 +1544,7 @@ public defn IntSet (cap0:Int) :
     cap = c
     limit = c * 3 / 4
     mask = cap - 1
-    slots = Array<Sentinel|Int|IntArray>(cap, sentinel())
+    slots = RawArray<Sentinel|Int|IntArray>(cap, sentinel())
     sizes = IntArray(cap, 0)
     size = 0
 
