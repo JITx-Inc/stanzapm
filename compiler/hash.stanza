@@ -96,7 +96,7 @@ public defn PerfectHashTable<?T> (entries0:Collection<KeyValue<Int,?T>> & Length
   defn put-in-buckets (d0:Int) :
     ;Initialize all tables
     buckets = Array<List<KeyValue<Int,T>>>(n, List())
-    bucket-indices = to-array<Int>(0 to n)
+    bucket-indices = to-intarray(0 to n)
     dtable = IntArray(n, 0)
     etable = Array<KeyValue<Int,T>|False>(n, false)
 
