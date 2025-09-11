@@ -1158,7 +1158,7 @@ defn holds-named-vars? (i:Ins) -> True|False :
 
 defn liveness-analysis () :
   ;Clear state
-  val var-uses = Array<List<VarUse>>(nvars(), List())
+  val var-uses = RawArray<List<VarUse>>(nvars(), List())
   val block-defs = BitMatrix(nblocks(), nvars())
 
   ;Mark uses and defs
@@ -1277,7 +1277,7 @@ defn add-annotations (blk:Block, b:Int) :
   ;===========================
   ;==== Liveness Tracking ====
   ;===========================
-  val usages = Array<False|Int>(nvars(), false)
+  val usages = RawArray<False|Int>(nvars(), false)
   val live-dirty = Vector<Int>()
 
   defn mark-used (n:Int, dist:Int) :
@@ -1299,10 +1299,10 @@ defn add-annotations (blk:Block, b:Int) :
   ;==== Preference Tracking ====
   ;=============================
   ;The remaining code prefers the variable to be loaded.
-  val prefers-load = Array<True|False>(nvars(), true)
+  val prefers-load = RawArray<True|False>(nvars(), true)
 
   ;The remaining code expects the variable to be saved.
-  val requires-save = Array<True|False>(nvars(), false)
+  val requires-save = RawArray<True|False>(nvars(), false)
 
   ;============================
   ;==== Instruction Buffer ====
@@ -1491,7 +1491,7 @@ defn allocate-classes (blk:Block, b:Int, backend:Backend) :
   ;========================
   ;==== Usage Tracking ====
   ;========================
-  val usages = Array<Int|False>(nvars(), false)
+  val usages = RawArray<Int|False>(nvars(), false)
   defn mark-next-use (n:Int, pos:Int) :
     usages[n] = pos
   defn next-use (n:Int) :
@@ -1646,9 +1646,9 @@ defn register-assignment (blk:Block, b:Int, backend:Backend) :
   ;===========================
   ;==== Register Tracking ====
   ;===========================
-  val var-locs = Array<False|Reg|FReg>(nvars(), false)
-  val reg-slots = Array<False|Int>(num-regs(backend), false)
-  val freg-slots = Array<False|Int>(num-fregs(backend), false)
+  val var-locs = RawArray<False|Reg|FReg>(nvars(), false)
+  val reg-slots = RawArray<False|Int>(num-regs(backend), false)
+  val freg-slots = RawArray<False|Int>(num-fregs(backend), false)
   val reg-list = FreeList(num-regs(backend))
   val freg-list = FreeList(num-fregs(backend))
 
@@ -1857,7 +1857,7 @@ defn register-assignment (blk:Block, b:Int, backend:Backend) :
   if not empty?(in-ports) :
     ;Retrieve output ports of predecessor block
     val pred = find!({_ < b}, PREDECESSORS[b])
-    val port-table = Array<Port>(nvars())
+    val port-table = RawArray<Port>(nvars())
     for p in OUT-PORTS[pred] do : port-table[n(p)] = p
     ;Calculate port locations
     val port-assigns = to-list $ for p in in-ports seq? :
@@ -2050,7 +2050,7 @@ defn stack-intervals () -> Seq<Interval> :
       note-usage(v, in-port-pos[b])
 
   defn sorted-intervals () :
-    val ints = Array<List<Interval>>(num-pos, List())
+    val ints = RawArray<List<Interval>>(num-pos, List())
     defn add-interval (i:Int, x:Interval) :
       ints[i] = cons(x, ints[i])
     for v in 0 to nvars() do :
@@ -2116,7 +2116,7 @@ defn stack-map () :
   ;===========================
   val occupied-locs = Vector<True|False>()
   val loc-types = Vector<VMType>()
-  val var-locs = Array<False|Int>(nvars(), false)
+  val var-locs = RawArray<False|Int>(nvars(), false)
 
   ;Get next available location
   defn available-loc (t:VMType) :
@@ -2177,7 +2177,7 @@ defn stack-map () :
 
 defmethod print (o:OutputStream, s:StackMap) :
   ;Discover vars per location
-  val vars = Array<List<Int>>(length(locations(s)), List())
+  val vars = RawArray<List<Int>>(length(locations(s)), List())
   for v in 0 to nvars() do :
     val loc = location(s, v)
     match(loc:Int) :
@@ -2192,7 +2192,7 @@ defn num-locations (s:StackMap) :
   length(locations(s))
 
 defn refmask (s:StackMap) :
-  val mask = Array<True|False>(size(s) / 8, false)
+  val mask = RawArray<True|False>(size(s) / 8, false)
   for (t in locations(s), offset in offsets(s)) do :
     match(t:VMRef) : mask[offset / 8] = true
   [length(mask), to-bitmask(mask)]
@@ -2212,14 +2212,14 @@ defn ref-offsets (s:StackMap) :
 ;=====================
 defn roots (nreg:Int, xs:List<Int>, ys:List<Int>) :
   ;Compute all sources
-  val srcs = Array<False|Int>(nreg, false)
-  val dsts = Array<List<Int>>(nreg, List())
+  val srcs = RawArray<False|Int>(nreg, false)
+  val dsts = RawArray<List<Int>>(nreg, List())
   for (x in xs, y in ys) do :
     srcs[x] = y
     dsts[y] = cons(x, dsts[y])
 
   ;Compute the source
-  val visited = Array<True|False>(nreg, false)
+  val visited = RawArray<True|False>(nreg, false)
   defn root (x:Int) :
     visit(x)
     match(srcs[x]) :
@@ -2244,11 +2244,11 @@ defn shuffle (nreg:Int, xs:List<Int>, ys:List<Int>,
               emit-move: (Int, Int) -> False
               emit-swap: (Int, Int) -> False) :
   ;Compute all destinations
-  val dsts = Array<List<Int>>(nreg, List())
+  val dsts = RawArray<List<Int>>(nreg, List())
   for (x in xs, y in ys) do :
     dsts[y] = cons(x, dsts[y])
 
-  val visited = Array<False|True>(nreg, false)
+  val visited = RawArray<False|True>(nreg, false)
   defn move (src:Int) -> True|False :
     ;Mark visited
     visited[src] = true
@@ -2276,11 +2276,11 @@ defn shuffle (nreg:Int, xs:List<Int>, ys:List<Int>,
 defn shuffle (nreg:Int, xs:List<Int>, ys:List<Int>, swap:Int
               emit-move: (Int, Int) -> False) :
   ;Compute destinations
-  val dsts = Array<List<Int>>(nreg, List())
+  val dsts = RawArray<List<Int>>(nreg, List())
   for (x in xs, y in ys) do :
     dsts[y] = cons(x, dsts[y])
 
-  val visited = Array<False|True>(nreg, false)
+  val visited = RawArray<False|True>(nreg, false)
   defn move (src:Int) -> True|False :
     ;Mark visited
     visited[src] = true
@@ -2364,7 +2364,7 @@ defn collapse-blocks () :
     val fshuffles = Vector<KeyValue<Int,Int>>()
 
     ;Populate port table
-    val port-table = Array<Port>(nvars())
+    val port-table = RawArray<Port>(nvars())
     for y in ys do : port-table[n(y)] = y
 
     ;Populate instruction buffers

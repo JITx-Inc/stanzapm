@@ -190,7 +190,7 @@ defn Registers (backend:Backend) -> Registers :
   val callc-freturn = freg-by-number[callc-fret(backend)]
 
   ;Assign registers
-  val reg-assignments-map = Array<Gp>(VMRegItem-length)
+  val reg-assignments-map = RawArray<Gp>(VMRegItem-length)
   for entry in reg-assignments do :
     val i = to-int(key(entry))
     reg-assignments-map[i] = value(entry)

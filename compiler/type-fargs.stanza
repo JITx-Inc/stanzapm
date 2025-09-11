@@ -241,7 +241,7 @@ public defn arg-pattern (arities:FnArities, expected:Tuple<FArg>, num-given:Int)
 public defn instantiate-pattern<?T> (fargs:Tuple<FArg<?T>>
                                      pat:ArgPattern,
                                      wrap-tuple:T -> T) -> Tuple<T> :
-  val ret = Array<T>(num-args(pat))
+  val ret = RawArray<T>(num-args(pat))
   for (a in args(pat), farg in fargs) do :
     match(a, type(a)) :
       (a:VarArg, u:GivenArg) :

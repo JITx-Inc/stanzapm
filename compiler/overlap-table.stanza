@@ -23,10 +23,10 @@ public defn OverlapTable (n:Int, num-coords:Int) -> OverlapTable :
     fatal("Empty OverlapTable")
 
   ;Create the layers for each coordinate.
-  val layers = Array<CoordLayer>(num-coords)
+  val layers = RawArray<CoordLayer>(num-coords)
   for i in 0 to num-coords do :
     layers[i] = CoordLayer(Vector<List<Int>>(),
-                           Array<Int|False>(n,false),
+                           RawArray<Int|False>(n,false),
                            HashSet<[Int,Int]>())
 
   ;Create the key for the pairwise table.
@@ -40,7 +40,7 @@ public defn OverlapTable (n:Int, num-coords:Int) -> OverlapTable :
 
     ;Partition a single group using the given layer of disjoint groups.
     defn partition (group:List<Int>, layer:CoordLayer) -> Seqable<List<Int>> :
-      val partitions = Array<List<Int>>(length(groups(layer)), List())
+      val partitions = RawArray<List<Int>>(length(groups(layer)), List())
       for v in group do :
         val i = markers(layer)[v]
         match(i:Int) :
@@ -177,7 +177,7 @@ public defn OverlapTable (n:Int, num-coords:Int) -> OverlapTable :
 ;- pairwise: the pairwise relations in the layer.
 defstruct CoordLayer :
   groups:Vector<List<Int>>  
-  markers:Array<Int|False>
+  markers:RawArray<Int|False>
   pairwise:HashSet<[Int,Int]>
 
 ;Return true if the given value in the layer is not part

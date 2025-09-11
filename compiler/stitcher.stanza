@@ -362,7 +362,7 @@ public defn Stitcher (packages:Collection<VMPackage>, bindings:Bindings|False, s
         (c:VMAbstractClass) : VMAbstractClass(gid(id(c)), gids(parents(c)), gids(children(c)))
 
     ;Categorize class definitions
-    val builtin-classes = Array<VMArrayClass|VMLeafClass>(NUM-BUILTIN-CONCRETE-TYPES)
+    val builtin-classes = RawArray<VMArrayClass|VMLeafClass>(NUM-BUILTIN-CONCRETE-TYPES)
     val concrete-classes = Vector<VMArrayClass|VMLeafClass>()
     val abstract-classes = Vector<VMAbstractClass>()
     for p in packages do :
