@@ -166,7 +166,7 @@ public defn read (form, forms:Tuple<Form>) :
             map(read-prod?{_, prod}, form)
 
          ;Read all values according to their field descriptors.
-         val values = Array<?>(n)
+         val values = RawArray<?>(n)
          defn* loop (i:Int, form:List) :
             if i < n :
                values[i] = match(fs[i]) :
