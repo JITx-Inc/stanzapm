@@ -222,10 +222,10 @@ defn get-all (xs:FlatObjects, indices:Range) -> Seq<Int> :
 defn tag-of (xs:FlatObjects, id:Int) -> Int :
   xs[offset(xs, id)]
 
-lostanza defn size-of (xs:ref<FlatObjects>, id:ref<Int>) -> ref<Int> :
-  return new Int{ xs.value.sizes.items[id.value] as int }
+lostanza defn size-of (xs:ref<FlatObjects>, id:ref<Int>) -> ref<Long> :
+  return new Long{ xs.value.sizes.items[id.value]}
 
-defn sizes (objs:FlatObjects) -> Seq<Int> :
+defn sizes (objs:FlatObjects) -> Seq<Long> :
   seq(size-of{objs, _}, 0 to length(objs))
 
 defn refs (objs:FlatObjects, id:Int) -> Seqable<Int> :
@@ -280,7 +280,7 @@ defstruct FlatIdObjects :
 with:
   printer => true
 
-defn sizes (o:FlatIdObjects) -> Seq<Int> :
+defn sizes (o:FlatIdObjects) -> Seq<Long> :
   gather(to-tuple(sizes(objs(o))), order(o))
 
 defn length (ios:FlatIdObjects) -> Int :
@@ -355,8 +355,8 @@ defn idom (num:Int, prevs:Tuple<List<Int>>) -> Tuple<Int> :
         loop() when changed?
   to-tuple $ doms
 
-defn calc-sizes (ios:FlatIdObjects, doms:Tuple<Int>) -> Array<Int> :
-  val tot-sizes = to-array<Int> $ sizes(ios)
+defn calc-sizes (ios:FlatIdObjects, doms:Tuple<Int>) -> LongArray :
+  val tot-sizes = to-longarray $ sizes(ios)
   val len = length(ios)
   for i in 0 to (len - 1) do :
     if doms[i] >= 0 :
@@ -364,7 +364,7 @@ defn calc-sizes (ios:FlatIdObjects, doms:Tuple<Int>) -> Array<Int> :
   tot-sizes
 
 defn print-xml
-    (s:FileOutputStream, id-objs:FlatIdObjects, sizes:Array<Int>,
+    (s:FileOutputStream, id-objs:FlatIdObjects, sizes:LongArray,
      nexts:Tuple<List<Int>>, doms:Tuple<Int>, max-depth:Int, min-size:Int) :
   val objs = objs(id-objs)
   defn children (doms:Tuple<Int>) -> Tuple<Tuple<Int>> :
@@ -383,7 +383,7 @@ defn print-xml
       val id = order(id-objs)[idx]
       val name = stringify(class-name(tag-of(objs, id)))
       P(depth, "<%_ RETAINED=\"%_\" STATIC=\"%_\">" % [name, sizes[idx], size-of(objs, id)])
-      val childs = reverse $ to-list $ qsort({ sizes[_] }, filter({ sizes[_] >= min-size }, kiddies[idx]))
+      val childs = reverse $ to-list $ qsort({ sizes[_] }, filter({ sizes[_] >= to-long(min-size) }, kiddies[idx]))
       for child in childs do :
         walk(child, depth + 1)
       P(depth, "</%_>" % [name])
