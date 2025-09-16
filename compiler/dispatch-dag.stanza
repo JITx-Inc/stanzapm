@@ -512,7 +512,7 @@ defmethod compare (a:IntervalEvent, b:IntervalEvent) :
 
 defn topo-order (n:Int, ancestors:Table<Int,List<Int>>) -> Tuple<Int> :
   val list = Vector<Int>()
-  val visited = Array<True|False>(n,false)
+  val visited = RawArray<True|False>(n,false)
   let loop (xs:Seqable<Int> = 0 to n):
     for x in xs do :
       if not visited[x] :
@@ -712,7 +712,7 @@ defmethod print (o:OutputStream, e:DagEntry) :
 ;============================================================
 
 defn all-cases (dag:Dag) :
-  val case = Array<Int>(depth(dag), 0)
+  val case = RawArray<Int>(depth(dag), 0)
   generate<KeyValue<Tuple<Int>,Soln>> :
     let visit (s:Int|Soln = 0) :
       match(s) :
@@ -755,7 +755,7 @@ public defn compute-dispatch-dag (btable:BranchTable, topological?:True|False) -
 
 public defn all-solns (dag:Dag, case:Tuple<Arg>, include-amb?:True|False) -> Tuple<Soln> :
   ;Track whether a dagentry has already been processed
-  val visited = Array<True|False>(length(entries(dag)), false)
+  val visited = RawArray<True|False>(length(entries(dag)), false)
 
   ;Accumulate all the reachable solutions
   val solns = HashSet<Soln>()

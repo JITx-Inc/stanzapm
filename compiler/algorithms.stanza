@@ -39,7 +39,7 @@ defmulti to-tuple (s:FIntSet) -> Tuple<Int>
 defmulti get (s:FIntSet, x:Int) -> True|False
 
 defn FIntSet (N:Int) :
-  val mark = Array<True|False>(N, false)
+  val mark = RawArray<True|False>(N, false)
   val accum = Vector<Int>()
   new FIntSet :
     defmethod add (this, x:Int) :
@@ -90,7 +90,7 @@ public defn bipartite-closure (entries0:Seqable<KeyValue<Int, Tuple<Int>>>) ->
     get-id(key(e)) => map(get-id,value(e))
 
   ;Track solutions
-  val solns = Array<Tuple<Int>|False>(num-ids(), false)
+  val solns = RawArray<Tuple<Int>|False>(num-ids(), false)
 
   ;Forward substitution (Recursively substitutes solutions)
   val visited = FIntSet(num-ids())

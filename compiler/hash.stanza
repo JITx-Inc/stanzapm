@@ -8,18 +8,18 @@ defpackage stz/hash :
 
 # Fundamental State #
 
-  buckets:Array<List<KeyValue<Int,T>>>
-  bucket-indices:Array<Int>
-  dtable:Array<Int>
-  etable:Array<KeyValue<Int,T>|False>  
+  buckets:RawArray<List<KeyValue<Int,T>>>
+  bucket-indices:IntArray
+  dtable:IntArray
+  etable:RawArray<KeyValue<Int,T>|False>  
 
 # Put entries into buckets #
 
 Input:
   d0:Int
 Output:
-  buckets:Array<List<KeyValue<Int,T>>> (implicit)
-  bucket-indices:Array<Int> (implicit)
+  buckets:RawArray<List<KeyValue<Int,T>>> (implicit)
+  bucket-indices:IntArray (implicit)
 
 # Computing a spreading d #
 
@@ -53,8 +53,8 @@ buckets. If the operation fails, then we return false.
 Input :
   start: Int
 Output :
-  dtable:Array<Int> (implicit)
-  etable:Array<KeyValue<Int,T>|False> (implicit)
+  dtable:IntArray (implicit)
+  etable:RawArray<KeyValue<Int,T>|False> (implicit)
 
 Given the starting index of the single-item buckets, put their entries
 into dtable and etable.
@@ -63,8 +63,8 @@ into dtable and etable.
 
 Output :
   d0:Int
-  dtable:Array<Int> (implicit)
-  etable:Array<KeyValue<Int,T>|False> (implicit)
+  dtable:IntArray (implicit)
+  etable:RawArray<KeyValue<Int,T>|False> (implicit)
 
 Returns the initial d0 used for hashing into first-level table.
 
@@ -87,18 +87,18 @@ public defn PerfectHashTable<?T> (entries0:Collection<KeyValue<Int,?T>> & Length
   val n = length(entries0)
 
   ;Hold buckets and sorted bucket indices
-  var buckets:Array<List<KeyValue<Int,T>>>
-  var bucket-indices:Array<Int>
-  var dtable:Array<Int>
-  var etable:Array<KeyValue<Int,T>|False>
+  var buckets:RawArray<List<KeyValue<Int,T>>>
+  var bucket-indices:IntArray
+  var dtable:IntArray
+  var etable:RawArray<KeyValue<Int,T>|False>
 
   ;Put all entries in buckets
   defn put-in-buckets (d0:Int) :
     ;Initialize all tables
-    buckets = Array<List<KeyValue<Int,T>>>(n, List())
-    bucket-indices = to-array<Int>(0 to n)
-    dtable = Array<Int>(n, 0)
-    etable = Array<KeyValue<Int,T>|False>(n, false)
+    buckets = RawArray<List<KeyValue<Int,T>>>(n, List())
+    bucket-indices = to-intarray(0 to n)
+    dtable = IntArray(n, 0)
+    etable = RawArray<KeyValue<Int,T>|False>(n, false)
 
     ;Put in buckets
     for e in entries0 do :
@@ -109,7 +109,7 @@ public defn PerfectHashTable<?T> (entries0:Collection<KeyValue<Int,?T>> & Length
     qsort!({(- length(buckets[_]))}, bucket-indices)
 
   ;Computing a spreading d
-  val dset = Array<Int>(n, -1)
+  val dset = IntArray(n, -1)
   val dcounter = to-seq(0 to false)
   defn compute-d (keys:Collection<Int>, max-d:Int) :    
     let loop-d (d:Int = 2) :

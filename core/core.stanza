@@ -7588,78 +7588,59 @@ public deftype Array<T> <: IndexedCollection<T> & Unique
 ;                     Implementation
 ;                     ==============
 
-lostanza deftype RawArray<T> <: Array<T> :
+public lostanza deftype RawArray<T> <: Array<T> :
    length: long
    var items: ref<?> ...
 
-lostanza defn RawArray<T> (n:ref<Int>, x:ref<?>) -> ref<RawArray<T>> :
-   val l = n.value
-   val a = new RawArray<T>{l}
-   for (var i:long = 0, i < l, i = i + 1) :
-      a.items[i] = x
-   return a
+public lostanza defn RawArray<T> (n:ref<Int>, x:ref<?>) -> ref<RawArray<T>> :
+  ensure-non-negative-length(n)
+  val l = n.value
+  val a = new RawArray<T>{l}
+  for (var i:long = 0, i < l, i = i + 1) :
+    a.items[i] = x
+  return a
 
-lostanza defmethod get<?T> (a:ref<RawArray<?T>>, i:ref<Int>) -> ref<T> :
+public defn RawArray<T> (n:Int) -> RawArray<T> :
+  ensure-non-negative-length(n)
+  RawArray<T>(n, sentinel)
+
+lostanza defn do-get<?T> (a:ref<RawArray<?T>>, i:ref<Int>) -> ref<T> :
   return a.items[i.value]
 
+defmethod get<?T> (a:RawArray<?T>, i:Int) -> T :
+  #if-defined(OPTIMIZED) :
+    do-get(a, i)
+  #else :
+    ensure-index-in-bounds(a, i)
+    match(do-get(a,i)) :
+      (v:Sentinel) : fatal("Index (%_) is uninitialized." % [i])
+      (v) : v
+
 lostanza defmethod set<?T> (a:ref<RawArray<?T>>, i:ref<Int>, v:ref<?T>) -> ref<False> :
+  ensure-index-in-bounds(a, i)
   a.items[i.value] = v
   return false
 
 lostanza defmethod set-all<?T> (xs:ref<RawArray<?T>>, r:ref<Range>, v:ref<?T>) -> ref<False> :
-   val range = range-bound(xs, r) as ref<Tuple<Int>>
-   val b = range.items[0].value
-   val e = range.items[1].value
-   for (var i:long = b, i < e, i = i + 1) :
-      xs.items[i] = v
-   return false
+  ensure-index-range(xs, r)
+  val range = range-bound(xs, r) as ref<Tuple<Int>>
+  val b = range.items[0].value
+  val e = range.items[1].value
+  for (var i:long = b, i < e, i = i + 1) :
+    xs.items[i] = v
+  return false
 
 lostanza defmethod length (a:ref<RawArray>) -> ref<Int> :
-   return new Int{a.length as int}
+  return new Int{a.length as int}
 
 defmethod print (o:OutputStream, a:RawArray) -> False :
-   print(o, "[%@]" % [a])
+  print(o, "[%@]" % [a])
 
-;                     Wrapping
-;                     ========
+public defn Array<T> (n:Int) -> RawArray<T> :
+  RawArray<T>(n, sentinel)
 
-#if-defined(OPTIMIZE) :
-
-   public defn Array<T> (n:Int) -> RawArray<T> :
-      RawArray<T>(n, sentinel)
-
-   public defn Array<T> (n:Int, x:T) -> RawArray<T> :
-      RawArray<T>(n, x)
-
-#else :
-
-   deftype WrappedArray<T> <: Array<T>
-
-   public defn Array<T> (n:Int) -> Array<T> :
-      ensure-non-negative("length", n)
-      Array<T>(RawArray<T>(n, sentinel))
-
-   public defn Array<T> (n:Int, x:T) -> Array<T> :
-      ensure-non-negative("length", n)
-      Array<T>(RawArray<T>(n, x))
-
-   defn Array<T> (a:RawArray) -> Array<T> :
-      new WrappedArray<T> :
-         defmethod get (this, i:Int) :
-            ensure-index-in-bounds(a, i)
-            match(a[i]) :
-               (v:Sentinel) : fatal("Index (%_) is uninitialized." % [i])
-               (v) : v
-         defmethod set (this, i:Int, v:T) :
-            ensure-index-in-bounds(a, i)
-            a[i] = v
-         defmethod set-all (this, r:Range, v:T) :
-            ensure-index-range(a, r)
-            set-all(a, r, v)
-         defmethod length (this) :
-            length(a)
-         defmethod print (o:OutputStream, this) :
-            print(o, a)
+public defn Array<T> (n:Int, x:T) -> RawArray<T> :
+  RawArray<T>(n, x)
 
 public defn map<R,?T> (xs:Array<?T>, f: T -> R) -> Array<R> :
   map<R>(f, xs)

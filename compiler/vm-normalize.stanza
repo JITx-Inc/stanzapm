@@ -783,6 +783,8 @@ defn normalize (f0:VMFunction, databuffer:DataBuffer, backend:Backend, iotable:I
             emit(buffer, Branch2Ins(n1(i), n2(i), NeOp(), #S(x(i)), NumConst(0)))
           (op) :
             emit(buffer, i)
+      (i:Branch2Ins) :
+        emit(buffer, Branch2Ins(n1(i), n2(i), op(i), #S(x(i)), #S(y(i))))
       (i:SetIns) :
         emit(buffer, SetIns(x(i), #L(y(i))))
       (i:ProfileIns) :

@@ -93,8 +93,8 @@ defn restrict-successors (successors:Int -> Seqable<Int>,
 ;============================================================
 
 defstruct LeavesAndCycles :
-  cycles:Array<Tuple<Int>|False>
-  leaves:Array<True|False>  
+  cycles:RawArray<Tuple<Int>|False>
+  leaves:RawArray<True|False>  
 
 defn compute-leaves-and-cycles (-- num-nodes:Int,
                                    successors:Int -> Seqable<Int>) -> LeavesAndCycles :
@@ -104,8 +104,8 @@ defn compute-leaves-and-cycles (-- num-nodes:Int,
       node => to-list(successors(node))
 
   ;Compute cycle indices.
-  val cycles = Array<Tuple<Int>|False>(num-nodes, false)
-  val cycle-indices = Array<Int|False>(num-nodes, false)
+  val cycles = RawArray<Tuple<Int>|False>(num-nodes, false)
+  val cycle-indices = RawArray<Int|False>(num-nodes, false)
   for component in components do :
     match(component:List<Int>) :
       if length(component) > 1 :
@@ -121,7 +121,7 @@ defn compute-leaves-and-cycles (-- num-nodes:Int,
       (f:False) : node
 
   ;Compute leaves.
-  val leaves = Array<True|False>(num-nodes, true)
+  val leaves = RawArray<True|False>(num-nodes, true)
   for node in 0 to num-nodes do :
     val node-r = representative-node(node)
     for succ in successors(node) do :
@@ -145,11 +145,11 @@ defn compute-leaves-and-cycles (-- num-nodes:Int,
 defn shortest-paths-children (-- num-nodes:Int,
                                  source:Int,
                                  successors:Int -> Seqable<Int>,
-                                 leaf?:Int -> True|False) -> Array<List<Int>> :
+                                 leaf?:Int -> True|False) -> RawArray<List<Int>> :
 
-  val visited = Array<True|False>(num-nodes, false)
+  val visited = RawArray<True|False>(num-nodes, false)
   
-  val children = Array<List<Int>>(num-nodes, List())
+  val children = RawArray<List<Int>>(num-nodes, List())
 
   val queue = Queue<Int>()
 
@@ -180,7 +180,7 @@ defn shortest-paths-children (-- num-nodes:Int,
 ;Compute shortest paths tree. Discard any branches that
 ;do not end in a leaf?.
 defn shortest-paths (-- source:Int,
-                        children:Array<List<Int>>,
+                        children:RawArray<List<Int>>,
                         leaf?:Int -> True|False) -> PathTree :
   defn path-tree (node:Int) -> PathTree|False :
     if empty?(children[node]) :
@@ -198,11 +198,11 @@ defn shortest-paths (-- source:Int,
 ;Compute the backedges in a traversal from the given source.
 defn backedges (-- num-nodes:Int,
                    source:Int,
-                   successors:Int -> Seqable<Int>) -> [Vector<KeyValue<Int,Int>>, Array<Int|False>] :
+                   successors:Int -> Seqable<Int>) -> [Vector<KeyValue<Int,Int>>, RawArray<Int|False>] :
   val backedges = Vector<KeyValue<Int,Int>>()
-  val parents = Array<Int|False>(num-nodes, false)
-  val visiting = Array<True|False>(num-nodes, false)
-  val visited = Array<True|False>(num-nodes, false)
+  val parents = RawArray<Int|False>(num-nodes, false)
+  val visiting = RawArray<True|False>(num-nodes, false)
+  val visited = RawArray<True|False>(num-nodes, false)
   let loop (node:Int = source, parent:Int|False = false) :
     if visited[node] :
       if visiting[node] :
@@ -217,7 +217,7 @@ defn backedges (-- num-nodes:Int,
 
 ;Convert the backedges into cycles.
 defn make-cycles (-- backedges:Vector<KeyValue<Int,Int>>,
-                     parents:Array<Int|False>) -> Seqable<Tuple<Int>> :
+                     parents:RawArray<Int|False>) -> Seqable<Tuple<Int>> :
   defn chain (-- leaf:Int, root:Int) -> List<Int> :
     if leaf == root : List(leaf)
     else : cons(leaf, chain(leaf = parents[leaf] as Int, root = root))
